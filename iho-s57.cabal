@@ -22,8 +22,8 @@ library
                      bytestring,
                      binary,
                      text,
-                     groom, 
-                     lens >= 4.5,
-                     attoparsec >= 0.11
+                     tables,
+                     lens,
+                     attoparsec
     ghc-prof-options: -auto-all -prof
 
