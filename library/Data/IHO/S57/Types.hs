@@ -12,8 +12,24 @@ import Data.Tree
 import Data.ByteString (ByteString)
 import Data.Map (Map)
 
+
+data RecordNameT =
+  CD | DP
+  deriving (Show, Eq, Data, Typeable)
+
+instance Enum RecordNameT where
+  fromEnum CD = error "CD not defined for binary use"
+  fromEnum DP = 20
+  toEnum 20 = DP
+  toEnum n = error $ "toEnum: undefined RecordNameT: " ++ show n
+
+readRecordNameT "DP" = DP  
+readRecordNameT "CD" = CD
+
+
+
 data RecordName = RecordName {
-  _rcnm :: Text,
+  _rcnm :: RecordNameT,
   _rcid :: Int
   } deriving (Show, Eq, Data, Typeable)
 makeClassy ''RecordName
@@ -73,6 +89,19 @@ structureMultiField  (S57MultiValue  _ v) = v
 
 
 dropISO :: S57FileRecord -> S57FileRecord
-dropISO n
-  | ((structureFieldName . rootLabel $ n) /= "0001") = error $ "not an ISO record: " ++ show n
-  | otherwise = head $ subForest n
+dropISO = head . dropParent "0001"
+
+
+dropParent :: Text -> S57FileRecord -> [S57FileRecord]
+dropParent p n
+  | ((structureFieldName . rootLabel $ n) /= p) = error $ "dropParent wrong name: " ++ show n
+  | otherwise = subForest n
+
+
+lookupChildFields :: Text -> S57FileRecord -> Text -> [Tree S57Structure]
+lookupChildFields p n fn =
+  let cf c = fn == (structureFieldName . rootLabel $ c)
+  in filter cf $ dropParent p n
+
+lookupChildField :: Text -> S57FileRecord -> Text -> Tree S57Structure
+lookupChildField p n fn = head $ lookupChildFields p n fn

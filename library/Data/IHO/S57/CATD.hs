@@ -39,10 +39,15 @@ instance FromS57FileRecord CATD where
     | ((structureFieldName . rootLabel $ r) /= "CATD") = error $ "not an CATD record: " ++ show r
     | otherwise =
         let rv = structureLinearField . rootLabel $ r
-            lookupField k = fromS57Value $
-                            maybe (error $ "CATD: unable to lookup key " ++ T.unpack k)
-                            id $ Map.lookup k rv
-            rn = RecordName { _rcnm = lookupField "RCNM", _rcid = lookupField "RCID" }
+            lookupFieldM k =
+              maybe (error $ "CATD: unable to lookup key " ++ T.unpack k)
+              id $ Map.lookup k rv
+            lookupField k = fromS57Value $ lookupFieldM k
+            rcnmV = case (lookupFieldM "RCNM") of
+                     (S57CharData v) -> readRecordNameT v
+                     (S57Int v) -> toEnum v
+                     v -> error $ "invalid RCNM value: " ++ show v
+            rn = RecordName { _rcnm = rcnmV, _rcid = lookupField "RCID" }
         in CATD { _catdRecordName = rn
                 , _catdFileName = lookupField "FILE"
                 , _catdFileLongName = lookupField "LFIL"

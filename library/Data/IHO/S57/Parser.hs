@@ -57,9 +57,20 @@ parseS57File = do
 
 parseS57File' :: Parser S57File
 parseS57File' = do
-  ddr <- parseDDR
-  drs <- (parseDR ddr defaultLexLevelConfig) `manyTill` endOfInput
-  return $ fmap (readDRs ddr) drs 
+  ddr <- parseDDR <?> "ddr record"
+  dr0' <- parseDR ddr defaultLexLevelConfig <?> "data record 0"
+  let dr0 = rootLabel . dropISO . readDRs ddr $ dr0'          
+  let lexLevelConfig =
+        case (structureFieldName dr0) of
+         "DSID" ->
+           let r = structureLinearField dr0
+               lookupF k = fromS57Value $
+                           maybe (error $ "DSSI: unable to lookup key " ++ T.unpack k)
+                           id $ Map.lookup k r
+           in defaultLexLevelConfig { lexLevelATTF = 2 }
+         _ -> defaultLexLevelConfig
+  drs <- (parseDR ddr lexLevelConfig) `manyTill` endOfInput
+  return $ fmap (readDRs ddr) (dr0':drs)
 
 
 
