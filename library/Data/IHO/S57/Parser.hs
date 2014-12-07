@@ -1,7 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Data.IHO.S57.Parser (S57Structure(..), S57Value(..), parseS57File) where
+module Data.IHO.S57.Parser
+       ( S57FileRecord
+       , S57File
+       , S57Structure(..)
+       , S57Value(..)
+       , parseS57File
+       ) where
 
 import Prelude hiding (take)
 import Data.Monoid
@@ -22,21 +28,7 @@ import Data.Map (Map)
 import Data.Char (ord)
 import Text.Groom
 import Data.Tree
-
-
-data S57Value =
-  S57CharData !Text |
-  S57Int !Int |
-  S57Real !Double |
-  S57Bits !ByteString 
-  deriving (Eq, Show)
-
-
-data S57Structure =
-  S57SingleValue !Text !S57Value |
-  S57LinearValue !Text ![(Text, S57Value)] |
-  S57MultiValue  !Text ![[(Text, S57Value)]]
-  deriving (Show, Eq)
+import Data.IHO.S57.Types
 
 data DataStructCode = Empty | Linear | MultiDim deriving (Show, Eq)
 data DataTypeCode = CharData | ImplicitPoint | Binary | MixedDataTypes deriving (Show, Eq)
@@ -50,7 +42,7 @@ data DDR = DDR {
   } 
 makeLenses ''DDR
 
-parseS57File :: Parser [Tree S57Structure]
+parseS57File :: Parser S57File
 parseS57File = do
   ddr <- parseDDR
   drs <- parseDR ddr `manyTill` endOfInput
@@ -142,7 +134,6 @@ parseDR ddr = do
   return (fmap (parseDRField ddr) fs)
 
 
---parseDRField :: DDR -> (Text, ByteString) -> (Text, ByteString)
 parseDRField ddr (fn, bs) =
   let (_,structCode,typeCode,ad,ps) = ddrLookup fn ddr
   in case (structCode) of
@@ -294,13 +285,6 @@ parseS57Value ll =
          , fmap (fmap $ signedDataParser 4) $ parseType' "b24"                 
          ]
 
-
-tx = ["A", "A(2)", "A()", "2A", "2A(2)", "2A()","B"]
-xx = fmap (parseOnly (parseType' "A")) tx
-
-ff :: Double
-ff = read "-32.566666680000"
-
 parseType' :: ByteString -> Parser [TypeInfo]
 parseType' tc = do
   ds <- many' digit
@@ -332,7 +316,11 @@ realDataParser = dataParser (S57Real . readParserDefault 0.0)
 
 
 bitsDataParser :: TypeInfo -> Parser S57Value
-bitsDataParser (Just n) = fmap (S57Bits) $ take n -- TODO: /8
+bitsDataParser (Just n) =
+  let bytesToRead = dN + if (mN /= 0) then 1 else 0
+      dN = n `div` 8
+      mN = n `mod` 8
+  in fmap (S57Bits) $ take bytesToRead
 btisDataParser arg = fail $ "bitsDataParser: undefined arg " ++ show arg 
 
 
@@ -420,8 +408,8 @@ tf = td ++ "ENC_ROOT/CATALOG.031"
 tf2 = td ++ "ENC_ROOT/GB5X01SW.001"
 main = do
   bs <- BS.readFile tf2
---  putStrLn . groom $ parseOnly parseFile bs
-  putStrLn . show $ parseOnly parseS57File bs
+  putStrLn . groom $ parseOnly parseS57File bs
+--  putStrLn . show $ parseOnly parseS57File bs
 
 
 
