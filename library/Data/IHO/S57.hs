@@ -5,13 +5,13 @@ module Data.IHO.S57 where
 import Data.IHO.S57.Types
 import Data.IHO.S57.Parser
 import Data.IHO.S57.CATD
+import Data.IHO.S57.DSID
 import Data.Attoparsec.ByteString.Char8 (Parser, parseOnly)
 import qualified Data.ByteString as BS
 --import Text.Groom
 
 parseCatalogFile :: Parser [CATD]
 parseCatalogFile = fmap (fmap fromS57FileRecord) $ parseS57File
-
 
 readCatalogFileIO :: FilePath -> IO [CATD]
 readCatalogFileIO fn = do

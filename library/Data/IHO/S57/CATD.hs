@@ -33,7 +33,6 @@ makeLenses ''CATD
 instance HasRecordName CATD where
   recordName = catdRecordName
 
-
 instance FromS57FileRecord CATD where
   fromS57FileRecord r
     | ((structureFieldName . rootLabel $ r) /= "CATD") = error $ "not an CATD record: " ++ show r
@@ -43,11 +42,7 @@ instance FromS57FileRecord CATD where
               maybe (error $ "CATD: unable to lookup key " ++ T.unpack k)
               id $ Map.lookup k rv
             lookupField k = fromS57Value $ lookupFieldM k
-            rcnmV = case (lookupFieldM "RCNM") of
-                     (S57CharData v) -> readRecordNameT v
-                     (S57Int v) -> toEnum v
-                     v -> error $ "invalid RCNM value: " ++ show v
-            rn = RecordName { _rcnm = rcnmV, _rcid = lookupField "RCID" }
+            rn = RecordName { _rcnm = lookupField "RCNM" , _rcid = lookupField "RCID" }
         in CATD { _catdRecordName = rn
                 , _catdFileName = lookupField "FILE"
                 , _catdFileLongName = lookupField "LFIL"

@@ -23,11 +23,6 @@ instance Enum RecordNameT where
   toEnum 20 = DP
   toEnum n = error $ "toEnum: undefined RecordNameT: " ++ show n
 
-readRecordNameT "DP" = DP  
-readRecordNameT "CD" = CD
-
-
-
 data RecordName = RecordName {
   _rcnm :: RecordNameT,
   _rcid :: Int
@@ -38,9 +33,15 @@ makeClassy ''RecordName
 type S57FileRecord = Tree S57Structure
 type S57File = [S57FileRecord]
 
-class (HasRecordName r) => FromS57FileRecord r where
+class FromS57FileRecord r where
   fromS57FileRecord :: S57FileRecord -> r
   
+instance FromS57Value RecordNameT where
+  fromS57Value (S57CharData "DP") = DP
+  fromS57Value (S57CharData "CD") = CD
+  fromS57Value (S57Int i) = toEnum i
+  fromS57Value v = error $ "fromS57Value RecordNameT undefined for " ++ show v
+
 
 
 data S57Value =
