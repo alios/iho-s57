@@ -19,7 +19,7 @@ import Data.Int
 import Data.Binary.Get (runGet, getWord16le, getWord32le)
 import qualified Data.Map as Map
 import Data.Map (Map)
-
+import Data.Char (ord)
 
 
 data S57Value =
@@ -29,7 +29,13 @@ data S57Value =
   S57Bits !ByteString 
   deriving (Eq, Show)
 
+data S57Structure =
+  S57SingleValue Text S57Value |
+  S57LinearValue Text [(Text, S57Value)] |
+  S57MultiValue  Text [[(Text, S57Value)]]
+  deriving (Show, Eq)
 
+           
 data DataStructCode = Empty | Linear | MultiDim deriving (Show, Eq)
 data DataTypeCode = CharData | ImplicitPoint | Binary | MixedDataTypes deriving (Show, Eq)
 
@@ -60,7 +66,7 @@ tagL = 4
 
 parseFile = do
   ddr <- parseDDR
-  drs <- parseDR ddr 
+  drs <- parseDR ddr `manyTill` endOfInput
   return (drs)
 
 parseDataStructCode = do
@@ -118,9 +124,9 @@ parseDR ddr = do
 parseDRField ddr (fn, bs) =
   let (_,structCode,typeCode,ad,ps) = ddrLookup fn ddr
   in case (structCode) of
-      Empty ->  (fn, Left $ either error id $ parseOnly (head ps) bs)
-      Linear -> (fn, Right $ either error id $ parseOnly (parseLinear ad ps) bs)
-      
+      Empty ->  S57SingleValue fn $ either error id $ parseOnly (head ps) bs
+      Linear -> S57LinearValue fn $ either error id $ parseOnly (parseLinear ad ps) bs
+     
 parseLinear :: [Text] -> [Parser S57Value] -> Parser [(Text, S57Value)]
 parseLinear [] [] = return []
 parseLinear (fn:fns) (p:ps) = do
@@ -171,14 +177,6 @@ parseFieldControlField = do
   return (title, Map.fromList fps)
 
   
--- 1
--- 6
--- 00;&
---
--- Catalog Directory field\US
--- RCNM!RCID!FILE!LFIL!VOLM!IMPL!SLAT!WLON!NLAT!ELON!CRCS!COMT\US
--- (A(2),I(10),3A,A(3),4R,2A)\RS
-
 parseDDField = do
   structCode <- parseDataStructCode
   typeCode <- parseDataTypeCode
@@ -229,7 +227,7 @@ parseDirectoryEntry tagL lengthL posL = do
   return (tag, pos, len)
 
 
-type TypeInfo = Either (Maybe Int) ()
+type TypeInfo = Maybe Int
 
 fromS57CharData (S57CharData t) = t
 fromS57CharData t = error $ "fromS57CharData: is not char data: " ++ show t
@@ -270,47 +268,94 @@ parseS57Value ll =
          , fmap (fmap $ signedDataParser 4) $ parseType' "b24"                 
          ]
 
+
+tx = ["A", "A(2)", "A()", "2A", "2A(2)", "2A()","B"]
+xx = fmap (parseOnly (parseType' "A")) tx
+
+ff :: Double
+ff = read "-32.566666680000"
+
 parseType' :: ByteString -> Parser [TypeInfo]
 parseType' tc = do
   ds <- many' digit
   let c = if (null ds) then 1 else read ds
   _ <- string tc
-  arg <- choice [ do _ <- string "()" ; return . Right $ ()
-                , do _ <- char '('; a <- fmap (Left . Just . read ) $
+  arg <- choice [ do _ <- char '('; a <- fmap (Just . read ) $
                                          digit `manyTill` char ')'; return a
-                , return . Left $ Nothing
+                , return Nothing
                 ]
   return . replicate c $ (arg)
 
-parseRLString ll rl = fmap fromS57CharData $ charDataParser ll (Left (Just rl)) 
-parseUTString ll = fmap fromS57CharData $ charDataParser ll (Right ())
 
-charDataParser :: Int -> TypeInfo -> Parser S57Value
-charDataParser ll (Left (Just n)) = fmap (S57CharData . mconcat) $ count n (lexLevelParser ll)
-charDataParser ll (Right ()) = fmap (S57CharData . mconcat) $ (lexLevelParser ll) `manyTill'` (choice [parseUT, parseFT])
-charDataParser _ arg = fail $ "charDataParser: undefined for lex level or arg " ++ show arg
 
-intDataParser :: Int -> TypeInfo -> Parser S57Value
-intDataParser ll (Left (Just n)) = fmap (S57Int . read . T.unpack . mconcat) $
-                                count n (lexLevelParser ll)
-intDataParser ll (Right ()) = fmap (S57Int . read . T.unpack . mconcat) $
-                           (lexLevelParser ll) `manyTill` parseUT
-intDataParser _ arg = fail $ "intDataParser: undefined for lex level or arg " ++ show arg
 
-realDataParser :: Int -> TypeInfo -> Parser S57Value
-realDataParser ll (Left (Just n)) = fmap (S57Real . read . T.unpack . mconcat) $
-                                count n (lexLevelParser ll)
-realDataParser ll (Right ()) = fmap (S57Real . read . T.unpack . mconcat) $
-                           (lexLevelParser ll) `manyTill` parseUT
-realDataParser _ arg = fail $ "realDataParser: undefined for lex level or arg " ++ show arg
+
+{-
+
+I(5)  00002\RS
+
+A(2): CD
+I(10) 0000000002
+A     GB5X01SW.001\US
+A     \US
+A     V01X01\US
+A(3)  BIN
+R     -32.566666680000\US
+R     60.866666680000\US
+R     -32.500000000000\US
+R     60.966666680000\US
+A     055C2ACA\US
+A     \US
+      \RS
+
+-}
+{-
+(A(2),I(10),3A,A(3),4R,2A)
+
+A(2),
+I(10),
+A,
+A,
+A,
+A(3),
+R,
+R,
+R,
+R,
+A,
+A)
+
+
+
+-}
+
+parseRLString ll rl = fmap fromS57CharData $ charDataParser ll (Just rl)
+parseUTString ll = fmap fromS57CharData $ charDataParser ll Nothing
+
+
+dataParser c ll arg =
+  fmap c $ case arg of
+   Nothing -> (lexLevelParser ll) `manyTill` parseUT
+   Just n  -> count n (lexLevelParser ll)
+   
+charDataParser = dataParser (S57CharData .  mconcat)
+intDataParser = dataParser (S57Int . readParserDefault 0)
+
+readParserDefault t [] = t
+readParserDefault _ cs = read . T.unpack . mconcat $ cs
+
+
+realDataParser = dataParser (S57Real . readParserDefault 0.0)
+
 
 bitsDataParser :: TypeInfo -> Parser S57Value
-bitsDataParser (Left (Just n)) = fmap (S57Bits) $ take n
-btisDataParser arg = fail $ "bitsDataParser: undefined for lex level or arg " ++ show arg
+bitsDataParser (Just n) = fmap (S57Bits) $ take n -- TODO: /8
+btisDataParser arg = fail $ "bitsDataParser: undefined arg " ++ show arg 
 
 
 signedDataParser :: Int -> TypeInfo -> Parser S57Value
-signedDataParser w (Left (Just n)) =
+singedDataParser w arg = error "signedDataParser: w: " ++ show w ++ " arg: " ++ show arg
+signedDataParser w Nothing =
   let p = case (w) of
         1 -> fmap (fromInteger . toInteger) parseInt8
         2 -> fmap (fromInteger . toInteger) parseInt16
@@ -318,7 +363,8 @@ signedDataParser w (Left (Just n)) =
   in  fmap S57Int p
 
 unsignedDataParser :: Int -> TypeInfo -> Parser S57Value
-unsignedDataParser w (Left (Just n)) =
+unsingedDataParser w arg = error "signedDataParser: w: " ++ show w ++ " arg: " ++ show arg
+unsignedDataParser w Nothing =
   let p = case (w) of
         1 -> fmap (fromInteger . toInteger) parseWord8
         2 -> fmap (fromInteger . toInteger) parseWord16
@@ -345,11 +391,15 @@ parseWord16 = fmap (runGet getWord16le . BL.fromStrict) $ take 2
 parseWord32 :: Parser Word32
 parseWord32 = fmap (runGet getWord32le . BL.fromStrict) $ take 4
 
-lexLevelParser 0 = fmap T.singleton $ choice [letter_ascii, digit, space]
-lexLevelParser 1 = fmap T.singleton letter_iso8859_15
+lexLevelParser 0 = fmap T.singleton $ satisfy isAscii
+lexLevelParser 1 = fmap T.singleton $ satisfy isISO8859_1
 lexLevelParser 2 = fmap T.decodeUtf16LE $ take 2
 
+isAscii :: Char -> Bool
+isAscii c = (ord c) < 128
 
+isISO8859_1 :: Char -> Bool
+isISO8859_1 c = (ord c) < 256
 
 
 s57 :: ()
@@ -366,5 +416,5 @@ td = "/home/alios/src/iho-s57/data/ENC3.1.1_TDS_Unencrypted/6.8.15.1a Receipt-In
 tf = td ++ "ENC_ROOT/CATALOG.031"
 tf2 = td ++ "ENC_ROOT/GB5X01SW.001"
 main = do
-  bs <- BS.readFile tf
-  parseTest parseFile bs
+  bs <- BS.readFile tf2
+  print $ parseOnly parseFile bs
