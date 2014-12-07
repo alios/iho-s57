@@ -26,7 +26,6 @@ import Data.Binary.Get (runGet, getWord16le, getWord32le)
 import qualified Data.Map as Map
 import Data.Map (Map)
 import Data.Char (ord)
-import Text.Groom
 import Data.Tree
 import Data.IHO.S57.Types
 
@@ -44,9 +43,18 @@ makeLenses ''DDR
 
 parseS57File :: Parser S57File
 parseS57File = do
+  rs <- parseS57File'
+  return $ fmap dropISO rs
+
+parseS57File' :: Parser S57File
+parseS57File' = do
   ddr <- parseDDR
   drs <- parseDR ddr `manyTill` endOfInput
-  return $ map (readDRs ddr) drs 
+  return $ fmap (readDRs ddr) drs 
+
+
+
+
 
 ddrLookup' fn ddr = do
   Map.lookup fn $ ddr ^. ddrFieldInfo
@@ -68,9 +76,6 @@ ddrLookupParent fn ddr =
       _ -> error "ddrLookupParent: found more then one parent"
 
 
-structureFieldName (S57SingleValue fn _) = fn
-structureFieldName (S57LinearValue fn _) = fn
-structureFieldName (S57MultiValue  fn _) = fn
 
 filterFieldsByName rs fn = filter (\r -> (structureFieldName r) == fn) rs
 
@@ -142,15 +147,15 @@ parseDRField ddr (fn, bs) =
       MultiDim -> S57MultiValue fn $ either error id $ parseOnly (parseMultiDim ad ps) bs
 
 
-parseMultiDim :: [Text] -> [Parser S57Value] -> Parser [[(Text, S57Value)]]
+parseMultiDim :: [Text] -> [Parser S57Value] -> Parser [Map Text S57Value]
 parseMultiDim fns pss = (parseLinear fns pss) `manyTill` parseFT
 
-parseLinear :: [Text] -> [Parser S57Value] -> Parser [(Text, S57Value)]
-parseLinear [] [] = return []
+parseLinear :: [Text] -> [Parser S57Value] -> Parser (Map Text S57Value)
+parseLinear [] [] = return mempty
 parseLinear (fn:fns) (p:ps) = do
   f <- p
   rs <- parseLinear fns ps
-  return $ (fn, f):rs
+  return $ Map.insert fn f rs
 
 
 
@@ -206,8 +211,6 @@ parseDDField = do
   if ((length ad /= length fcs) && (null ad && (length fcs) /= 1))
     then fail $ "parseDDField invalid field/parser data, fcs length: " ++ show (length fcs)
     else return (fieldName, structCode, typeCode, ad, fcs)
-
-
 
 
 parseLexLevel =
@@ -395,21 +398,4 @@ parseDataTypeCode = do
 
 s57 :: ()
 s57 = ()
-
-
-
-
-
-
-
-
-td = "/home/alios/src/iho-s57/data/ENC3.1.1_TDS_Unencrypted/6.8.15.1a Receipt-Installation and Application of Updates/001/"
-tf = td ++ "ENC_ROOT/CATALOG.031"
-tf2 = td ++ "ENC_ROOT/GB5X01SW.001"
-main = do
-  bs <- BS.readFile tf2
-  putStrLn . groom $ parseOnly parseS57File bs
---  putStrLn . show $ parseOnly parseS57File bs
-
-
 

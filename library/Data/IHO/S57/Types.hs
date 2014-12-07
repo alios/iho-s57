@@ -10,6 +10,7 @@ import Data.Typeable (Typeable)
 import Data.Text (Text)
 import Data.Tree
 import Data.ByteString (ByteString)
+import Data.Map (Map)
 
 data RecordName = RecordName {
   _rcnm :: Text,
@@ -54,9 +55,24 @@ instance FromS57Value ByteString where
 
 
 
-
 data S57Structure =
   S57SingleValue Text S57Value |
-  S57LinearValue Text [(Text, S57Value)] |
-  S57MultiValue  Text [[(Text, S57Value)]]
+  S57LinearValue Text (Map Text S57Value)|
+  S57MultiValue  Text [Map Text S57Value]
   deriving (Show, Eq, Data, Typeable)
+
+
+structureFieldName :: S57Structure -> Text
+structureFieldName (S57SingleValue fn _) = fn
+structureFieldName (S57LinearValue fn _) = fn
+structureFieldName (S57MultiValue  fn _) = fn
+
+structureSingleField (S57SingleValue _ v) = v
+structureLinearField (S57LinearValue _ v) = v
+structureMultiField  (S57MultiValue  _ v) = v
+
+
+dropISO :: S57FileRecord -> S57FileRecord
+dropISO n
+  | ((structureFieldName . rootLabel $ n) /= "0001") = error $ "not an ISO record: " ++ show n
+  | otherwise = head $ subForest n
