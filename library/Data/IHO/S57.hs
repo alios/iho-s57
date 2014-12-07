@@ -6,12 +6,28 @@ import Data.IHO.S57.Types
 import Data.IHO.S57.Parser
 import Data.IHO.S57.CATD
 import Data.IHO.S57.DSID
+import Data.IHO.S57.FRID
 import Data.Attoparsec.ByteString.Char8 (Parser, parseOnly)
 import qualified Data.ByteString as BS
---import Text.Groom
+import Text.Groom
 
 parseCatalogFile :: Parser [CATD]
 parseCatalogFile = fmap (fmap fromS57FileRecord) $ parseS57File
+
+parseDataFile :: Parser (DSID, [FRID], [S57FileRecord])
+parseDataFile = do
+  (_dsid:_rs) <- parseS57File
+  let _frids = fmap fromS57FileRecord $ lookupRecords "FRID" _rs
+  return $ (fromS57FileRecord _dsid, _frids, _rs)
+  
+
+parseS57FileIO fn = fmap (parseOnly parseDataFile) $ BS.readFile fn
+
+readDataFileIO fn = do
+  res <- parseS57FileIO fn
+  case res of
+   Left err -> fail $ "readDataFileIO: unable to read file '" ++ show fn ++ "': " ++ show err
+   Right r -> return r
 
 readCatalogFileIO :: FilePath -> IO [CATD]
 readCatalogFileIO fn = do
@@ -31,10 +47,12 @@ readS57Dir fn =
 
 
 
-td = "/home/alios/src/iho-s57/data/ENC3.1.1_TDS_Unencrypted/6.8.15.1a Receipt-Installation and Application of Updates/002/"
+td = "/home/alios/src/iho-s57/data/ENC3.1.1_TDS_Unencrypted/6.8.15.1a Receipt-Installation and Application of Updates/001/"
 tf = td ++ "ENC_ROOT/CATALOG.031"
 tf2 = td ++ "ENC_ROOT/GB5X01SW.001"
 
 main = do
   catds <- readS57Dir td
-  putStrLn . show $ catds
+  dsid <- readDataFileIO tf2
+  raw <- parseS57FileIO tf2
+  putStrLn . groom $ raw

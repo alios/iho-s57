@@ -14,13 +14,15 @@ import Data.Map (Map)
 
 
 data RecordNameT =
-  CD | DP
+  CD | DP | FE
   deriving (Show, Eq, Data, Typeable)
 
 instance Enum RecordNameT where
   fromEnum CD = error "CD not defined for binary use"
-  fromEnum DP = 20
-  toEnum 20 = DP
+  fromEnum DP = 10
+  fromEnum FE = 100
+  toEnum 10 = DP
+  toEnum 100 = FE
   toEnum n = error $ "toEnum: undefined RecordNameT: " ++ show n
 
 data RecordName = RecordName {
@@ -39,9 +41,9 @@ class FromS57FileRecord r where
 instance FromS57Value RecordNameT where
   fromS57Value (S57CharData "DP") = DP
   fromS57Value (S57CharData "CD") = CD
+  fromS57Value (S57CharData "FE") = FE
   fromS57Value (S57Int i) = toEnum i
   fromS57Value v = error $ "fromS57Value RecordNameT undefined for " ++ show v
-
 
 
 data S57Value =
@@ -85,8 +87,35 @@ structureFieldName (S57LinearValue fn _) = fn
 structureFieldName (S57MultiValue  fn _) = fn
 
 structureSingleField (S57SingleValue _ v) = v
+structureSingleField f = error $ "structureSingleField: unexpected " ++ show f
+
 structureLinearField (S57LinearValue _ v) = v
+structureLinearField f = error $ "structureLinearField: unexpected " ++ show f
+
 structureMultiField  (S57MultiValue  _ v) = v
+structureMultiField f = error $ "structureMultiField: unexpected " ++ show f
+
+
+
+data UpdateInstruction = Insert | Delete | Modify
+  deriving (Show, Eq, Data, Typeable)
+
+instance Enum UpdateInstruction where
+  toEnum 1 = Insert
+  toEnum 2 = Delete
+  toEnum 3 = Modify
+  toEnum t = error $ "toEnum: " ++ show t ++ " is not a UpdateInstruction"
+  fromEnum Insert = 1
+  fromEnum Delete = 2
+  fromEnum Modify = 3
+
+instance FromS57Value UpdateInstruction where
+  fromS57Value (S57CharData "I") = Insert
+  fromS57Value (S57CharData "D") = Delete
+  fromS57Value (S57CharData "M") = Modify
+  fromS57Value (S57Int i) = toEnum i
+  fromS57Value v = error $ "fromS57Value UpdateInstruction undefined for " ++ show v
+
 
 
 dropISO :: S57FileRecord -> S57FileRecord
@@ -99,10 +128,23 @@ dropParent p n
   | otherwise = subForest n
 
 
+lookupRecords :: Text -> [S57FileRecord] -> [S57FileRecord]
+lookupRecords rn rs =
+  filter (\r ->(structureFieldName . rootLabel $ r) == rn) rs
+  
+
 lookupChildFields :: Text -> S57FileRecord -> Text -> [Tree S57Structure]
 lookupChildFields p n fn =
   let cf c = fn == (structureFieldName . rootLabel $ c)
   in filter cf $ dropParent p n
 
 lookupChildField :: Text -> S57FileRecord -> Text -> Tree S57Structure
-lookupChildField p n fn = head $ lookupChildFields p n fn
+lookupChildField p n fn = maybe (error $ "lookupChildField: unable to find: " ++ show fn) id $
+                          lookupChildFieldM p n fn
+
+lookupChildFieldM :: Text -> S57FileRecord -> Text -> Maybe (Tree S57Structure)
+lookupChildFieldM p n fn =
+  case (lookupChildFields p n fn) of
+   [] -> Nothing
+   (x:_) -> Just x
+
