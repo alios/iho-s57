@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Data.IHO.S57.Types.S57 (s57) where
+module Data.IHO.S57.Parser (S57Structure(..), S57Value(..), parseS57File) where
 
 import Prelude hiding (take)
 import Data.Monoid
@@ -20,6 +20,8 @@ import Data.Binary.Get (runGet, getWord16le, getWord32le)
 import qualified Data.Map as Map
 import Data.Map (Map)
 import Data.Char (ord)
+import Text.Groom
+import Data.Tree
 
 
 data S57Value =
@@ -29,13 +31,13 @@ data S57Value =
   S57Bits !ByteString 
   deriving (Eq, Show)
 
+
 data S57Structure =
-  S57SingleValue Text S57Value |
-  S57LinearValue Text [(Text, S57Value)] |
-  S57MultiValue  Text [[(Text, S57Value)]]
+  S57SingleValue !Text !S57Value |
+  S57LinearValue !Text ![(Text, S57Value)] |
+  S57MultiValue  !Text ![[(Text, S57Value)]]
   deriving (Show, Eq)
 
-           
 data DataStructCode = Empty | Linear | MultiDim deriving (Show, Eq)
 data DataTypeCode = CharData | ImplicitPoint | Binary | MixedDataTypes deriving (Show, Eq)
 
@@ -43,11 +45,16 @@ type FieldInfo = (Text, DataStructCode, DataTypeCode, [Text], [Parser S57Value])
 
 data DDR = DDR {
   _ddrDesc :: Text,
-  _ddrFieldControlField :: Map Text Text,
+  _ddrFieldControlField :: [(Text, Text)],
   _ddrFieldInfo :: Map Text FieldInfo
   } 
 makeLenses ''DDR
 
+parseS57File :: Parser [Tree S57Structure]
+parseS57File = do
+  ddr <- parseDDR
+  drs <- parseDR ddr `manyTill` endOfInput
+  return $ map (readDRs ddr) drs 
 
 ddrLookup' fn ddr = do
   Map.lookup fn $ ddr ^. ddrFieldInfo
@@ -57,36 +64,51 @@ ddrLookup fn ddr  = maybe (error $ "unable to lookup field info in DDR for: " ++
    
 
 
+ddrLookupChildren fn ddr =
+    let fcf = ddr ^. ddrFieldControlField
+    in fmap snd $ filter (\(p, _) -> fn == p) fcf
+       
+ddrLookupParent fn ddr =
+  let fcf = ddr ^. ddrFieldControlField
+  in case (filter (\(_, c) -> fn == c) fcf) of
+      [] -> Nothing
+      ((p, _):[]) -> Just p
+      _ -> error "ddrLookupParent: found more then one parent"
+
+
+structureFieldName (S57SingleValue fn _) = fn
+structureFieldName (S57LinearValue fn _) = fn
+structureFieldName (S57MultiValue  fn _) = fn
+
+filterFieldsByName rs fn = filter (\r -> (structureFieldName r) == fn) rs
+
+
+
+readDRs _ [] = error "readDRs: empty structure"
+readDRs _ (_:[]) = error "readDRs: structure has only one record"
+readDRs ddr (dr0:dr1:drs)
+  | (structureFieldName dr0 /= "0001") = error "readDRs: first record must be 0001"
+  | otherwise = Node {
+      rootLabel = dr0,
+      subForest = [
+        Node {
+           rootLabel = dr1,
+           subForest = buildSubForrest ddr dr1 drs
+           }
+        ]
+      }
+  
+buildSubForrest ddr dr1 drs =
+  let cns = ddrLookupChildren (structureFieldName dr1) ddr
+      cns' = mconcat $ fmap (filterFieldsByName drs) cns
+      emptyTree l = Node l []
+  in fmap emptyTree cns'
+
 
 parseFT = char '\RS'
 parseUT = char '\US'
 tagL = 4
 
-
-
-parseFile = do
-  ddr <- parseDDR
-  drs <- parseDR ddr `manyTill` endOfInput
-  return (drs)
-
-parseDataStructCode = do
-  c <- satisfy $ inClass "012"
-  case c of
-   '0' -> return Empty
-   '1' -> return Linear
-   '2' -> return MultiDim
-   c' -> fail $ "parseDataStructCode: undefined code: " ++ show c'
-
-
-
-parseDataTypeCode = do
-  c <- satisfy $ inClass "0156"
-  case c of
-   '0' -> return CharData
-   '1' -> return ImplicitPoint
-   '5' -> return Binary
-   '6' -> return MixedDataTypes
-   c' -> fail $ "parseDataTypeCode: undefined code: " ++ show c'
 
 
 
@@ -126,7 +148,12 @@ parseDRField ddr (fn, bs) =
   in case (structCode) of
       Empty ->  S57SingleValue fn $ either error id $ parseOnly (head ps) bs
       Linear -> S57LinearValue fn $ either error id $ parseOnly (parseLinear ad ps) bs
-     
+      MultiDim -> S57MultiValue fn $ either error id $ parseOnly (parseMultiDim ad ps) bs
+
+
+parseMultiDim :: [Text] -> [Parser S57Value] -> Parser [[(Text, S57Value)]]
+parseMultiDim fns pss = (parseLinear fns pss) `manyTill` parseFT
+
 parseLinear :: [Text] -> [Parser S57Value] -> Parser [(Text, S57Value)]
 parseLinear [] [] = return []
 parseLinear (fn:fns) (p:ps) = do
@@ -174,7 +201,7 @@ parseFieldControlField = do
         b <- parseRLString 0 tagL
         return (a,b)
   fps <- takeFieldPair `manyTill` parseFT
-  return (title, Map.fromList fps)
+  return (title, fps)
 
   
 parseDDField = do
@@ -233,7 +260,6 @@ fromS57CharData (S57CharData t) = t
 fromS57CharData t = error $ "fromS57CharData: is not char data: " ++ show t
 
 
-
 parseFieldNames = do
   fn <- fmap T.pack $ many' (satisfy $ notInClass "!\US")
   s <- satisfy $ inClass "!\US"
@@ -285,49 +311,6 @@ parseType' tc = do
                 , return Nothing
                 ]
   return . replicate c $ (arg)
-
-
-
-
-
-{-
-
-I(5)  00002\RS
-
-A(2): CD
-I(10) 0000000002
-A     GB5X01SW.001\US
-A     \US
-A     V01X01\US
-A(3)  BIN
-R     -32.566666680000\US
-R     60.866666680000\US
-R     -32.500000000000\US
-R     60.966666680000\US
-A     055C2ACA\US
-A     \US
-      \RS
-
--}
-{-
-(A(2),I(10),3A,A(3),4R,2A)
-
-A(2),
-I(10),
-A,
-A,
-A,
-A(3),
-R,
-R,
-R,
-R,
-A,
-A)
-
-
-
--}
 
 parseRLString ll rl = fmap fromS57CharData $ charDataParser ll (Just rl)
 parseUTString ll = fmap fromS57CharData $ charDataParser ll Nothing
@@ -402,6 +385,26 @@ isISO8859_1 :: Char -> Bool
 isISO8859_1 c = (ord c) < 256
 
 
+parseDataStructCode = do
+  c <- satisfy $ inClass "012"
+  case c of
+   '0' -> return Empty
+   '1' -> return Linear
+   '2' -> return MultiDim
+   c' -> fail $ "parseDataStructCode: undefined code: " ++ show c'
+
+
+
+parseDataTypeCode = do
+  c <- satisfy $ inClass "0156"
+  case c of
+   '0' -> return CharData
+   '1' -> return ImplicitPoint
+   '5' -> return Binary
+   '6' -> return MixedDataTypes
+   c' -> fail $ "parseDataTypeCode: undefined code: " ++ show c'
+
+
 s57 :: ()
 s57 = ()
 
@@ -417,4 +420,8 @@ tf = td ++ "ENC_ROOT/CATALOG.031"
 tf2 = td ++ "ENC_ROOT/GB5X01SW.001"
 main = do
   bs <- BS.readFile tf2
-  print $ parseOnly parseFile bs
+--  putStrLn . groom $ parseOnly parseFile bs
+  putStrLn . show $ parseOnly parseS57File bs
+
+
+
