@@ -7,6 +7,7 @@ import Data.IHO.S57.Parser
 import Data.IHO.S57.CATD
 import Data.IHO.S57.DSID
 import Data.IHO.S57.FRID
+import Data.IHO.S57.VRID    
 import Data.Attoparsec.ByteString.Char8 (Parser, parseOnly)
 import qualified Data.ByteString as BS
 import Text.Groom
@@ -14,13 +15,15 @@ import Text.Groom
 parseCatalogFile :: Parser [CATD]
 parseCatalogFile = fmap (fmap fromS57FileRecord) $ parseS57File
 
-parseDataFile :: Parser (DSID, [FRID], [S57FileRecord])
+parseDataFile :: Parser (DSID, [FRID], [VRID], [S57FileRecord])
 parseDataFile = do
   (_dsid:_rs) <- parseS57File
   let (_frids,__rs) =  lookupRecords "FRID" _rs
+  let (_vrids,___rs) =  lookupRecords "VRID" _rs                       
   return $ (fromS57FileRecord _dsid
            ,fmap fromS57FileRecord _frids
-           , __rs)
+           ,fmap fromS57FileRecord _vrids
+           , ___rs)
   
 
 parseS57FileIO fn = fmap (parseOnly parseDataFile) $ BS.readFile fn
