@@ -128,9 +128,11 @@ dropParent p n
   | otherwise = subForest n
 
 
-lookupRecords :: Text -> [S57FileRecord] -> [S57FileRecord]
+lookupRecords :: Text -> [S57FileRecord] -> ([S57FileRecord],[S57FileRecord])
 lookupRecords rn rs =
-  filter (\r ->(structureFieldName . rootLabel $ r) == rn) rs
+  let fin = filter (\r ->(structureFieldName . rootLabel $ r) == rn) rs
+      fout = filter (\r ->(structureFieldName . rootLabel $ r) /= rn) rs
+  in (fin,fout)
   
 
 lookupChildFields :: Text -> S57FileRecord -> Text -> [Tree S57Structure]

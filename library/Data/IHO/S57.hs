@@ -17,8 +17,10 @@ parseCatalogFile = fmap (fmap fromS57FileRecord) $ parseS57File
 parseDataFile :: Parser (DSID, [FRID], [S57FileRecord])
 parseDataFile = do
   (_dsid:_rs) <- parseS57File
-  let _frids = fmap fromS57FileRecord $ lookupRecords "FRID" _rs
-  return $ (fromS57FileRecord _dsid, _frids, _rs)
+  let (_frids,__rs) =  lookupRecords "FRID" _rs
+  return $ (fromS57FileRecord _dsid
+           ,fmap fromS57FileRecord _frids
+           , __rs)
   
 
 parseS57FileIO fn = fmap (parseOnly parseDataFile) $ BS.readFile fn
@@ -51,8 +53,11 @@ td = "/home/alios/src/iho-s57/data/ENC3.1.1_TDS_Unencrypted/6.8.15.1a Receipt-In
 tf = td ++ "ENC_ROOT/CATALOG.031"
 tf2 = td ++ "ENC_ROOT/GB5X01SW.001"
 
+
+td2 = "/home/alios/src/iho-s57/data/ENC3.1.1_TDS_Unencrypted/6.4.1 Power Up/"
+tf3 = td2 ++ "ENC_ROOT/GB5X01NE.000"
 main = do
-  catds <- readS57Dir td
-  dsid <- readDataFileIO tf2
+  catds <- readS57Dir td2
+--  dsid <- readDataFileIO tf2
   raw <- parseS57FileIO tf2
   putStrLn . groom $ raw
