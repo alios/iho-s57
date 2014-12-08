@@ -11,7 +11,8 @@ import Data.Text (Text)
 import Data.Tree
 import Data.ByteString (ByteString)
 import Data.Map (Map)
-
+import qualified Data.Text as T
+import qualified Data.Map as Map
 
 data RecordNameT =
   CD | DP | FE
@@ -100,15 +101,6 @@ structureMultiField f = error $ "structureMultiField: unexpected " ++ show f
 data UpdateInstruction = Insert | Delete | Modify
   deriving (Show, Eq, Data, Typeable)
 
-instance Enum UpdateInstruction where
-  toEnum 1 = Insert
-  toEnum 2 = Delete
-  toEnum 3 = Modify
-  toEnum t = error $ "toEnum: " ++ show t ++ " is not a UpdateInstruction"
-  fromEnum Insert = 1
-  fromEnum Delete = 2
-  fromEnum Modify = 3
-
 instance FromS57Value UpdateInstruction where
   fromS57Value (S57CharData "I") = Insert
   fromS57Value (S57CharData "D") = Delete
@@ -116,6 +108,28 @@ instance FromS57Value UpdateInstruction where
   fromS57Value (S57Int i) = toEnum i
   fromS57Value v = error $ "fromS57Value UpdateInstruction undefined for " ++ show v
 
+data Orientation
+  = Forward | Reverse | NullOrientation
+  deriving (Show, Eq, Data, Typeable)
+
+data UsageIndicator
+  = Exterior | Interior | TruncatedExterior | NullUsage
+  deriving (Show, Eq, Data, Typeable)
+
+data MaskingIndicator
+  = Mask | Show | NullMask           
+  deriving (Show, Eq, Data, Typeable)
+
+
+mkAttrs :: S57FileRecord -> Map Int Text
+mkAttrs r =
+  let rv = structureMultiField . rootLabel $ r
+      lookupFieldM k _r =
+        maybe (error $ "mkAttrs: unable to lookup key " ++ T.unpack k)
+        id $ Map.lookup k _r
+      lookupField k _r = fromS57Value $ lookupFieldM k _r
+      mkATTF _r = (lookupField "*ATTL" _r, lookupField "ATVL" _r)
+  in Map.fromList $ fmap mkATTF rv
 
 
 dropISO :: S57FileRecord -> S57FileRecord
@@ -150,3 +164,69 @@ lookupChildFieldM p n fn =
    [] -> Nothing
    (x:_) -> Just x
 
+
+
+
+instance Enum Orientation where
+  toEnum 1 = Forward
+  toEnum 2 = Reverse
+  toEnum 255 = NullOrientation
+  toEnum t = error $ "toEnum: " ++ show t ++ " is not a Orientation"
+  fromEnum Forward = 1
+  fromEnum Reverse = 2
+  fromEnum NullOrientation = 255
+
+instance FromS57Value Orientation where
+  fromS57Value (S57CharData "F") = Forward
+  fromS57Value (S57CharData "R") = Reverse
+  fromS57Value (S57CharData "N") = NullOrientation
+  fromS57Value (S57Int i) = toEnum i
+  fromS57Value v = error $ "fromS57Value Orientation undefined for " ++ show v
+
+
+instance Enum UsageIndicator where
+  toEnum 1 = Exterior
+  toEnum 2 = Interior
+  toEnum 3 = TruncatedExterior
+  toEnum 255 = NullUsage
+  toEnum t = error $ "toEnum: " ++ show t ++ " is not a UsageIndicator"
+  fromEnum Exterior = 1
+  fromEnum Interior = 2
+  fromEnum TruncatedExterior = 3
+  fromEnum NullUsage = 255
+
+instance FromS57Value UsageIndicator where
+  fromS57Value (S57CharData "E") = Exterior
+  fromS57Value (S57CharData "I") = Interior
+  fromS57Value (S57CharData "C") = TruncatedExterior 
+  fromS57Value (S57CharData "N") = NullUsage
+  fromS57Value (S57Int i) = toEnum i
+  fromS57Value v = error $ "fromS57Value UsageIndicator undefined for " ++ show v
+
+
+instance Enum MaskingIndicator where
+  toEnum 1 = Mask
+  toEnum 2 = Show
+  toEnum 255 = NullMask
+  toEnum t = error $ "toEnum: " ++ show t ++ " is not a MaskingIndicator"
+  fromEnum Mask = 1
+  fromEnum Show = 2
+  fromEnum NullMask = 255
+
+
+instance FromS57Value MaskingIndicator where
+  fromS57Value (S57CharData "M") = Mask
+  fromS57Value (S57CharData "S") = Show
+  fromS57Value (S57CharData "N") = NullMask
+  fromS57Value (S57Int i) = toEnum i
+  fromS57Value v = error $ "fromS57Value MaskingIndicator undefined for " ++ show v
+
+
+instance Enum UpdateInstruction where
+  toEnum 1 = Insert
+  toEnum 2 = Delete
+  toEnum 3 = Modify
+  toEnum t = error $ "toEnum: " ++ show t ++ " is not a UpdateInstruction"
+  fromEnum Insert = 1
+  fromEnum Delete = 2
+  fromEnum Modify = 3
