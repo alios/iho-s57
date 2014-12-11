@@ -25,10 +25,16 @@ library
                      containers,
                      bytestring,
                      binary,
+                     mtl,
+                     exceptions, 
                      text,
-                     tables,
-                     lens,
-                     attoparsec,
-                     groom
+                     tables >= 0.4,
+                     lens >= 4.6,
+                     attoparsec >= 0.12,
+                     groom,
+                     conduit >= 1.2,
+                     conduit-extra >= 1.1,
+                     async >= 2
+
     ghc-prof-options: -auto-all -prof
 

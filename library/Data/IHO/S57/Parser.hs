@@ -2,12 +2,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 module Data.IHO.S57.Parser
-       ( S57FileRecord
-       , S57File
-       , S57Structure(..)
-       , S57Value(..)
-       , parseS57File
-       ) where
+        where
 
 import Prelude hiding (take)
 import Data.Monoid
