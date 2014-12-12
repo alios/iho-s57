@@ -1,6 +1,8 @@
+{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 module Data.IHO.S57.Types where
 
@@ -15,16 +17,9 @@ import qualified Data.Text as T
 import qualified Data.Map as Map
 
 data RecordNameT =
-  CD | DP | FE
+  CD | DP | FE | IsolatedNode | ConnectedNode | Edge | Face
   deriving (Show, Eq, Data, Typeable)
 
-instance Enum RecordNameT where
-  fromEnum CD = error "CD not defined for binary use"
-  fromEnum DP = 10
-  fromEnum FE = 100
-  toEnum 10 = DP
-  toEnum 100 = FE
-  toEnum n = error $ "toEnum: undefined RecordNameT: " ++ show n
 
 data RecordName = RecordName {
   _rcnm :: RecordNameT,
@@ -36,15 +31,37 @@ makeClassy ''RecordName
 type S57FileRecord = Tree S57Structure
 type S57File = [S57FileRecord]
 
-class FromS57FileRecord r where
+class (Typeable r) => FromS57FileRecord r where
   fromS57FileRecord :: S57FileRecord -> r
+
   
 instance FromS57Value RecordNameT where
   fromS57Value (S57CharData "DP") = DP
   fromS57Value (S57CharData "CD") = CD
   fromS57Value (S57CharData "FE") = FE
+  fromS57Value (S57CharData "VI") = IsolatedNode
+  fromS57Value (S57CharData "VC") = ConnectedNode
+  fromS57Value (S57CharData "VE") = Edge
+  fromS57Value (S57CharData "VF") = Face
   fromS57Value (S57Int i) = toEnum i
   fromS57Value v = error $ "fromS57Value RecordNameT undefined for " ++ show v
+
+
+instance Enum RecordNameT where
+  fromEnum CD = error "CD not defined for binary use"
+  fromEnum DP = 10
+  fromEnum FE = 100
+  fromEnum IsolatedNode = 110
+  fromEnum ConnectedNode = 120
+  fromEnum Edge = 130
+  fromEnum Face = 140
+  toEnum 10 = DP
+  toEnum 100 = FE
+  toEnum 110 = IsolatedNode
+  toEnum 120 = ConnectedNode
+  toEnum 130 = Edge
+  toEnum 140 = Face
+  toEnum n = error $ "toEnum: undefined RecordNameT: " ++ show n
 
 
 data S57Value =

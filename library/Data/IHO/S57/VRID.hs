@@ -7,7 +7,7 @@ module Data.IHO.S57.VRID where
 import Control.Lens
 import Data.Text (Text)
 import Data.Data (Data)
-import Data.Typeable (Typeable)
+import Data.Typeable (Typeable, cast)
 import Data.Tree
 import qualified Data.Map as Map
 import qualified Data.Text as T
@@ -128,3 +128,9 @@ instance FromS57Value TopologyIndicator where
   fromS57Value (S57Int i) = toEnum i
   fromS57Value v = error $ "fromS57Value TopologyIndicator undefined for " ++ show v
  
+
+toVRPC :: S57FileRecord -> Maybe VRPC
+toVRPC r = cast $ (fromS57FileRecord r :: VRPC)
+
+isVRPC :: S57FileRecord -> Bool
+isVRPC = maybe False (\_ -> True) . toVRPC

@@ -31,7 +31,7 @@ type FieldInfo = (Text, DataStructCode, DataTypeCode, [Text], [Int -> Parser S57
 
 data DDR = DDR {
   _ddrDesc :: Text,
-  _ddrFieldControlField :: [(Text, Text)],
+  _ddrFileControlField :: [(Text, Text)],
   _ddrFieldInfo :: Map Text FieldInfo
   } 
 makeLenses ''DDR
@@ -84,11 +84,11 @@ ddrLookup fn ddr  = maybe (error $ "unable to lookup field info in DDR for: " ++
 
 
 ddrLookupChildren fn ddr =
-    let fcf = ddr ^. ddrFieldControlField
+    let fcf = ddr ^. ddrFileControlField
     in fmap snd $ filter (\(p, _) -> fn == p) fcf
        
 ddrLookupParent fn ddr =
-  let fcf = ddr ^. ddrFieldControlField
+  let fcf = ddr ^. ddrFileControlField
   in case (filter (\(_, c) -> fn == c) fcf) of
       [] -> Nothing
       ((p, _):[]) -> Just p
@@ -135,11 +135,11 @@ parseDDR = do
   (baseAddr, lengthL, posL) <- parseDDRLeader
   dir <- (parseDirectoryEntry tagL lengthL posL) `manyTill` parseFT
   (fcfRaw:fsRaw) <- parseDirectory dir
-  let fcf = doParseFieldControlField  $ snd fcfRaw
+  let fcf = doParseFileControlField  $ snd fcfRaw
       fs = fmap doParseDDField fsRaw
   return $ DDR {
     _ddrDesc = T.pack $ fst fcf,
-    _ddrFieldControlField = snd fcf,
+    _ddrFileControlField = snd fcf,
     _ddrFieldInfo = Map.fromList $ fs
     }
 
@@ -189,13 +189,13 @@ parseLinear ll (fn:fns) (p:ps) =
 
 
 
-doParseFieldControlField bs =
-  case (parseOnly (parseFieldControlField) bs) of
-   Left err -> error $ "doParseFieldControlField: " ++ show err ++ " on " ++ show bs
+doParseFileControlField bs =
+  case (parseOnly (parseFileControlField) bs) of
+   Left err -> error $ "doParseFileControlField: " ++ show err ++ " on " ++ show bs
    Right r -> r
 
 
-parseFieldControlField = do
+parseFileControlField = do
   _ <- string "0000;&"
   lexL <- parseLexLevel
   title <- anyChar `manyTill` parseUT
