@@ -24,8 +24,8 @@ data VRPC =
        } deriving (Show, Eq, Data, Typeable)
 makeLenses ''VRPC
 
-instance FromS57FileRecord VRPC where
-  fromS57FileRecord r
+
+readVRPC r
     | ((structureFieldName . rootLabel $ r) /= "VRPC") = error $ "not an VRPC record: " ++ show r
     | otherwise =
         let rv = structureLinearField . rootLabel $ r
@@ -99,7 +99,7 @@ instance FromS57FileRecord VRID where
                 , _vridVersion = lookupField "RVER"
                 , _vridUpdateInstruction = lookupField "RUIN"
                 , _vridATTFs = maybe mempty mkAttrs $ lookupChildFieldM "VRID" r "ATTF"
-                , _vridVRPC = fmap fromS57FileRecord $ lookupChildFieldM "VRID" r "FFPC"
+                , _vridVRPC = fmap readVRPC $ lookupChildFieldM "VRID" r "FFPC"
                 , _vridVRPTs = maybe mempty mkVRPTs $ lookupChildFieldM "VRID" r "VRPT"                             
                 }
 
@@ -130,7 +130,7 @@ instance FromS57Value TopologyIndicator where
  
 
 toVRPC :: S57FileRecord -> Maybe VRPC
-toVRPC r = cast $ (fromS57FileRecord r :: VRPC)
+toVRPC r = cast $ (readVRPC r :: VRPC)
 
 isVRPC :: S57FileRecord -> Bool
 isVRPC = maybe False (\_ -> True) . toVRPC

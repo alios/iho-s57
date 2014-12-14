@@ -31,7 +31,7 @@ makeClassy ''RecordName
 type S57FileRecord = Tree S57Structure
 type S57File = [S57FileRecord]
 
-class (Typeable r) => FromS57FileRecord r where
+class (Typeable r, HasRecordName r) => FromS57FileRecord r where
   fromS57FileRecord :: S57FileRecord -> r
 
   

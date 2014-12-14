@@ -63,8 +63,7 @@ data DSSI =
        } deriving (Show, Eq, Data, Typeable)
 makeClassy ''DSSI
          
-instance FromS57FileRecord DSSI where
-  fromS57FileRecord r
+readDSSI r
     | ((structureFieldName . rootLabel $ r) /= "DSSI") = error $ "not an DSSI record: " ++ show r
     | otherwise =
         let rv = structureLinearField . rootLabel $ r
@@ -191,7 +190,7 @@ instance FromS57FileRecord DSID where
                   , _dsidProductSpecificationEdition = lookupField "PRED"
                   , _dsidApplicationProfile = lookupField "PROF"
                   , _dsidProducingAgency = lookupField "AGEN"
-                  , _dsidDSSI = fromS57FileRecord $ lookupChildField "DSID" r "DSSI"
+                  , _dsidDSSI = readDSSI $ lookupChildField "DSID" r "DSSI"
                   }
 
 

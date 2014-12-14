@@ -24,8 +24,8 @@ data FOID =
 
 makeClassy ''FOID
 
-instance FromS57FileRecord FOID where
-  fromS57FileRecord r
+
+readFOID r
     | ((structureFieldName . rootLabel $ r) /= "FOID") = error $ "not an FOID record: " ++ show r
     | otherwise =
         let rv = structureLinearField . rootLabel $ r
@@ -45,8 +45,8 @@ data FFPC =
        } deriving (Show, Eq, Data, Typeable)
 makeLenses ''FFPC
 
-instance FromS57FileRecord FFPC where
-  fromS57FileRecord r
+
+readFFPC r
     | ((structureFieldName . rootLabel $ r) /= "FFPC") = error $ "not an FFPC record: " ++ show r
     | otherwise =
         let rv = structureLinearField . rootLabel $ r
@@ -94,8 +94,8 @@ data FSPC =
 
 makeClassy ''FSPC
 
-instance FromS57FileRecord FSPC where
-  fromS57FileRecord r
+
+readFSPC r
     | ((structureFieldName . rootLabel $ r) /= "FSPC") = error $ "not an FSPC record: " ++ show r
     | otherwise =
         let rv = structureLinearField . rootLabel $ r
@@ -178,12 +178,12 @@ instance FromS57FileRecord FRID where
                   , _fridObjectLabel = lookupField "OBJL"
                   , _fridVersion = lookupField "RVER"
                   , _fridUpdateInstruction = lookupField "RUIN"
-                  , _fridFOID = fromS57FileRecord $ lookupChildField "FRID" r "FOID"
+                  , _fridFOID = readFOID $ lookupChildField "FRID" r "FOID"
                   , _fridATTFs = maybe mempty mkAttrs $ lookupChildFieldM "FRID" r "ATTF"
                   , _fridNATFs = maybe mempty mkAttrs $ lookupChildFieldM "FRID" r "NATF"
-                  , _fridFFPC = fmap fromS57FileRecord $ lookupChildFieldM "FRID" r "FFPC"
+                  , _fridFFPC = fmap readFFPC $ lookupChildFieldM "FRID" r "FFPC"
                   , _fridFFPTs = maybe mempty mkFFPTs $ lookupChildFieldM "FRID" r "FFPT"
-                  , _fridFSPC = fmap fromS57FileRecord $ lookupChildFieldM "FRID" r "FSPC"
+                  , _fridFSPC = fmap readFSPC $ lookupChildFieldM "FRID" r "FSPC"
                   , _fridFSPTs = maybe mempty mkFSPTs $ lookupChildFieldM "FRID" r "FSPT"
                   }
 
