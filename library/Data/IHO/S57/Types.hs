@@ -42,9 +42,13 @@ type S57File = [S57FileRecord]
 
 class (Typeable r) => FromS57FileRecord r where
   fromS57FileDataRecord :: S57FileRecord -> r
-  fromS57FileRecord :: S57FileRecord -> Record r
 
 
+fromS57FileRecord :: (FromS57FileRecord r) => S57FileRecord -> Record r
+fromS57FileRecord r =
+  let rn = readRecordName r
+      d = fromS57FileDataRecord r
+  in Record rn d
 
 instance FromS57Value RecordNameT where
   fromS57Value (S57CharData "DP") = DP
@@ -115,12 +119,15 @@ structureFieldName (S57SingleValue fn _) = fn
 structureFieldName (S57LinearValue fn _) = fn
 structureFieldName (S57MultiValue  fn _) = fn
 
+structureSingleField :: S57Structure -> S57Value
 structureSingleField (S57SingleValue _ v) = v
 structureSingleField f = error $ "structureSingleField: unexpected " ++ show f
 
+structureLinearField :: S57Structure -> Map Text S57Value
 structureLinearField (S57LinearValue _ v) = v
 structureLinearField f = error $ "structureLinearField: unexpected " ++ show f
 
+structureMultiField :: S57Structure -> [Map Text S57Value]
 structureMultiField  (S57MultiValue  _ v) = v
 structureMultiField f = error $ "structureMultiField: unexpected " ++ show f
 
@@ -155,8 +162,8 @@ mkAttrs r =
       lookupFieldM k _r =
         maybe (error $ "mkAttrs: unable to lookup key " ++ T.unpack k)
         id $ Map.lookup k _r
-      lookupField k _r = fromS57Value $ lookupFieldM k _r
-      mkATTF _r = (lookupField "*ATTL" _r, lookupField "ATVL" _r)
+      _lookupField k _r = fromS57Value $ lookupFieldM k _r
+      mkATTF _r = (_lookupField "*ATTL" _r, _lookupField "ATVL" _r)
   in Map.fromList $ fmap mkATTF rv
 
 
@@ -200,8 +207,10 @@ lookupField r =
         id $ Map.lookup k rv
   in fromS57Value . lookupFieldM 
 
-
-
+readRecordName :: Tree S57Structure -> RecordName 
+readRecordName r = 
+  RecordName { _rcnm = lookupField r "RCNM"
+             , _rcid = lookupField r "RCID" }
 
 instance Enum Orientation where
   toEnum 1 = Forward

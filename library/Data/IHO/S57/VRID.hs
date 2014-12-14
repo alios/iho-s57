@@ -75,22 +75,19 @@ makeLenses ''VRID
 
 
 instance FromS57FileRecord VRID where
-  fromS57FileRecord r
+  fromS57FileDataRecord r
     | ((structureFieldName . rootLabel $ r) /= "FRID") =
         error $ "not an FRID record: " ++ show r
     | otherwise =
-        let rn = RecordName { _rcnm = lookupField r "RCNM"
-                            , _rcid = lookupField r "RCID" }
-            vrid = VRID { _vridVersion = lookupField r "RVER"
-                        , _vridUpdateInstruction = lookupField r "RUIN"
-                        , _vridATTFs = maybe mempty mkAttrs $
-                                       lookupChildFieldM "VRID" r "ATTF"
-                        , _vridVRPC = fmap readVRPC $
-                                      lookupChildFieldM "VRID" r "FFPC"
-                        , _vridVRPTs = maybe mempty mkVRPTs $
-                                       lookupChildFieldM "VRID" r "VRPT"                             
-                        }
-        in Record rn vrid
+        VRID { _vridVersion = lookupField r "RVER"
+             , _vridUpdateInstruction = lookupField r "RUIN"
+             , _vridATTFs = maybe mempty mkAttrs $
+                            lookupChildFieldM "VRID" r "ATTF"
+             , _vridVRPC = fmap readVRPC $
+                           lookupChildFieldM "VRID" r "FFPC"
+             , _vridVRPTs = maybe mempty mkVRPTs $
+                            lookupChildFieldM "VRID" r "VRPT"         
+             }
 
 instance Enum TopologyIndicator where
   toEnum 1 = BeginningNode

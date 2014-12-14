@@ -30,23 +30,18 @@ data CATD =
 makeLenses ''CATD
 
 instance FromS57FileRecord CATD where
-  fromS57FileRecord r
+  fromS57FileDataRecord r
     | ((structureFieldName . rootLabel $ r) /= "CATD") =
         error $ "not an CATD record: " ++ show r
     | otherwise =
-        let rn =
-              RecordName { _rcnm = lookupField r "RCNM"
-                         , _rcid = lookupField r "RCID" }
-            catd =
-              CATD { _catdFileName = lookupField r "FILE"
-                   , _catdFileLongName = lookupField r "LFIL"
-                   , _catdVolume = lookupField r "VOLM"
-                   , _catdImplementation = lookupField r "IMPL"
-                   , _catdSouthernMostLatitude = lookupField r "SLAT"
-                   , _catdWesternMostLongitude = lookupField r "WLON"
-                   , _catdNothernMostLatitude = lookupField r "NLAT"
-                   , _catdEasternMostLongitude = lookupField r "ELON"
-                   , _catdCrc = lookupField r "CRCS"
-                   , _catdComment = lookupField r "COMT"
-                   }
-        in Record rn catd
+        CATD { _catdFileName = lookupField r "FILE"
+             , _catdFileLongName = lookupField r "LFIL"
+             , _catdVolume = lookupField r "VOLM"
+             , _catdImplementation = lookupField r "IMPL"
+             , _catdSouthernMostLatitude = lookupField r "SLAT"
+             , _catdWesternMostLongitude = lookupField r "WLON"
+             , _catdNothernMostLatitude = lookupField r "NLAT"
+             , _catdEasternMostLongitude = lookupField r "ELON"
+             , _catdCrc = lookupField r "CRCS"
+             , _catdComment = lookupField r "COMT"
+             }

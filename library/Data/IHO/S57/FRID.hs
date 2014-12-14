@@ -145,34 +145,31 @@ instance HasFOID FRID where
   fOID = fridFOID
   
 instance FromS57FileRecord FRID where
-  fromS57FileRecord r
+  fromS57FileDataRecord r
     | ((structureFieldName . rootLabel $ r) /= "FRID") =
         error $ "not an FRID record: " ++ show r
     | otherwise =
-        let rn = RecordName { _rcnm = lookupField r "RCNM"
-                            , _rcid = lookupField r "RCID" }
-            groupV = lookupField r "GRUP"
-            frid = FRID { _fridGeometricPrimtive = lookupField r "PRIM"
-                        , _fridGroup = if ((groupV >= 1) && (groupV <=254))
-                                       then Just groupV else Nothing
-                        , _fridObjectLabel = lookupField r "OBJL"
-                        , _fridVersion = lookupField r "RVER"
-                        , _fridUpdateInstruction = lookupField r "RUIN"
-                        , _fridFOID = readFOID $ lookupChildField "FRID" r "FOID"
-                        , _fridATTFs = maybe mempty mkAttrs $
-                                       lookupChildFieldM "FRID" r "ATTF"
-                        , _fridNATFs = maybe mempty mkAttrs $
-                                       lookupChildFieldM "FRID" r "NATF"
-                        , _fridFFPC = fmap readFFPC $
-                                      lookupChildFieldM "FRID" r "FFPC"
-                        , _fridFFPTs = maybe mempty mkFFPTs $
-                                       lookupChildFieldM "FRID" r "FFPT"
-                        , _fridFSPC = fmap readFSPC $
-                                      lookupChildFieldM "FRID" r "FSPC"
-                        , _fridFSPTs = maybe mempty mkFSPTs $
-                                       lookupChildFieldM "FRID" r "FSPT"
-                        }
-        in Record rn frid
+        let groupV = lookupField r "GRUP"
+        in FRID { _fridGeometricPrimtive = lookupField r "PRIM"
+                , _fridGroup = if ((groupV >= 1) && (groupV <=254))
+                               then Just groupV else Nothing
+                , _fridObjectLabel = lookupField r "OBJL"
+                , _fridVersion = lookupField r "RVER"
+                , _fridUpdateInstruction = lookupField r "RUIN"
+                , _fridFOID = readFOID $ lookupChildField "FRID" r "FOID"
+                , _fridATTFs = maybe mempty mkAttrs $
+                               lookupChildFieldM "FRID" r "ATTF"
+                , _fridNATFs = maybe mempty mkAttrs $
+                               lookupChildFieldM "FRID" r "NATF"
+                , _fridFFPC = fmap readFFPC $
+                              lookupChildFieldM "FRID" r "FFPC"
+                , _fridFFPTs = maybe mempty mkFFPTs $
+                               lookupChildFieldM "FRID" r "FFPT"
+                , _fridFSPC = fmap readFSPC $
+                              lookupChildFieldM "FRID" r "FSPC"
+                , _fridFSPTs = maybe mempty mkFSPTs $
+                               lookupChildFieldM "FRID" r "FSPT"
+                }
 
 instance Enum GeometricPrimitive where
   toEnum 1 = Point

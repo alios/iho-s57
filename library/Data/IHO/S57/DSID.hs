@@ -160,28 +160,23 @@ instance HasDSSI DSID where
   dSSI = dsidDSSI
 
 instance FromS57FileRecord DSID where
-  fromS57FileRecord r
+  fromS57FileDataRecord r
     | ((structureFieldName . rootLabel $ r) /= "DSID") =
         error $ "not an DSID record: " ++ show r
     | otherwise =
-        let rn =
-              RecordName { _rcnm = lookupField r "RCNM",
-                           _rcid = lookupField r "RCID" }
-            dsid =
-              DSID { _dsidExchangePurpose = lookupField r "EXPP"
-                   , _dsidIntendedUsage = lookupField r "INTU"
-                   , _dsidDataSetName = lookupField r "DSNM"
-                   , _dsidEdition = lookupField r "EDTN"
-                   , _dsidUpdate = lookupField r "UPDN"
-                   , _dsidUpdateApplicationDate = lookupField r "UADT"
-                   , _dsidIssueDate = lookupField r "ISDT"
-                   , _dsidS57Edition = lookupField r "STED"
-                   , _dsidProductSpecification = lookupField r "PRSP"
-                   , _dsidProductSpecificationDescrption = lookupField r "PSDN"
-                   , _dsidProductSpecificationEdition = lookupField r "PRED"
-                   , _dsidApplicationProfile = lookupField r "PROF"
-                   , _dsidProducingAgency = lookupField r "AGEN"
-                   , _dsidDSSI = readDSSI $ lookupChildField "DSID" r "DSSI"
-                   }
-        in Record rn dsid
+        DSID { _dsidExchangePurpose = lookupField r "EXPP"
+             , _dsidIntendedUsage = lookupField r "INTU"
+             , _dsidDataSetName = lookupField r "DSNM"
+             , _dsidEdition = lookupField r "EDTN"
+             , _dsidUpdate = lookupField r "UPDN"
+             , _dsidUpdateApplicationDate = lookupField r "UADT"
+             , _dsidIssueDate = lookupField r "ISDT"
+             , _dsidS57Edition = lookupField r "STED"
+             , _dsidProductSpecification = lookupField r "PRSP"
+             , _dsidProductSpecificationDescrption = lookupField r "PSDN"
+             , _dsidProductSpecificationEdition = lookupField r "PRED"
+             , _dsidApplicationProfile = lookupField r "PROF"
+             , _dsidProducingAgency = lookupField r "AGEN"
+             , _dsidDSSI = readDSSI $ lookupChildField "DSID" r "DSSI"
+             }
 
