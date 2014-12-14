@@ -12,6 +12,7 @@ import Data.Attoparsec.ByteString.Char8 (Parser, parseOnly)
 import qualified Data.ByteString as BS
 import Text.Groom
 
+{-
 parseCatalogFile :: Parser [CATD]
 parseCatalogFile = fmap (fmap fromS57FileRecord) $ parseS57File
 
@@ -64,3 +65,4 @@ main = do
 --  dsid <- readDataFileIO tf2
   raw <- parseS57FileIO tf2
   putStrLn . groom $ raw
+-}

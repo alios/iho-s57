@@ -16,8 +16,7 @@ import Data.IHO.S57.Types
              
 
 data CATD =
-  CATD { _catdRecordName :: ! RecordName
-       , _catdFileName :: ! Text
+  CATD { _catdFileName :: ! Text
        , _catdFileLongName :: ! Text
        , _catdVolume :: ! Text
        , _catdImplementation :: ! Text
@@ -30,28 +29,24 @@ data CATD =
        } deriving (Show, Eq, Data, Typeable)
 makeLenses ''CATD
 
-instance HasRecordName CATD where
-  recordName = catdRecordName
-
 instance FromS57FileRecord CATD where
   fromS57FileRecord r
-    | ((structureFieldName . rootLabel $ r) /= "CATD") = error $ "not an CATD record: " ++ show r
+    | ((structureFieldName . rootLabel $ r) /= "CATD") =
+        error $ "not an CATD record: " ++ show r
     | otherwise =
-        let rv = structureLinearField . rootLabel $ r
-            lookupFieldM k =
-              maybe (error $ "CATD: unable to lookup key " ++ T.unpack k)
-              id $ Map.lookup k rv
-            lookupField k = fromS57Value $ lookupFieldM k
-            rn = RecordName { _rcnm = lookupField "RCNM" , _rcid = lookupField "RCID" }
-        in CATD { _catdRecordName = rn
-                , _catdFileName = lookupField "FILE"
-                , _catdFileLongName = lookupField "LFIL"
-                , _catdVolume = lookupField "VOLM"
-                , _catdImplementation = lookupField "IMPL"
-                , _catdSouthernMostLatitude = lookupField "SLAT"
-                , _catdWesternMostLongitude = lookupField "WLON"
-                , _catdNothernMostLatitude = lookupField "NLAT"
-                , _catdEasternMostLongitude = lookupField "ELON"
-                , _catdCrc = lookupField "CRCS"
-                , _catdComment = lookupField "COMT"
-          }
+        let rn =
+              RecordName { _rcnm = lookupField r "RCNM"
+                         , _rcid = lookupField r "RCID" }
+            catd =
+              CATD { _catdFileName = lookupField r "FILE"
+                   , _catdFileLongName = lookupField r "LFIL"
+                   , _catdVolume = lookupField r "VOLM"
+                   , _catdImplementation = lookupField r "IMPL"
+                   , _catdSouthernMostLatitude = lookupField r "SLAT"
+                   , _catdWesternMostLongitude = lookupField r "WLON"
+                   , _catdNothernMostLatitude = lookupField r "NLAT"
+                   , _catdEasternMostLongitude = lookupField r "ELON"
+                   , _catdCrc = lookupField r "CRCS"
+                   , _catdComment = lookupField r "COMT"
+                   }
+        in Record rn catd

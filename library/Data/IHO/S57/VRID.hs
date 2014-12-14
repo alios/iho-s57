@@ -24,28 +24,21 @@ data VRPC =
        } deriving (Show, Eq, Data, Typeable)
 makeLenses ''VRPC
 
-
+readVRPC :: Tree S57Structure -> VRPC
 readVRPC r
-    | ((structureFieldName . rootLabel $ r) /= "VRPC") = error $ "not an VRPC record: " ++ show r
+    | ((structureFieldName . rootLabel $ r) /= "VRPC") =
+        error $ "not an VRPC record: " ++ show r
     | otherwise =
-        let rv = structureLinearField . rootLabel $ r
-            lookupFieldM k =
-              maybe (error $ "VRPC: unable to lookup key " ++ T.unpack k)
-              id $ Map.lookup k rv
-            lookupField k = fromS57Value $ lookupFieldM k
-        in VRPC { _vrpcUpdateInstruction = lookupField "VPUI"
-                , _vrpcObjectPointerIndex = lookupField "VPIX"
-                , _vrpcFeatureObjectPointers = lookupField "NVPT"
-                }
-
-
+        VRPC { _vrpcUpdateInstruction = lookupField r "VPUI"
+             , _vrpcObjectPointerIndex = lookupField r "VPIX"
+             , _vrpcFeatureObjectPointers = lookupField r "NVPT"
+             }
 
 data TopologyIndicator
     = BeginningNode | EndNode | LeftFace | RightFace | ContainingFace | NullTopo
       deriving (Show, Eq, Data, Typeable)
 
-                      
-      
+               
 data VRPT =
   VRPT { _vrptName :: ! ByteString
        , _vrptOrientation :: ! Orientation
@@ -62,18 +55,17 @@ mkVRPTs r
           lookupFieldM k _r =
             maybe (error $ "mkVRPT: unable to lookup key " ++ T.unpack k)
             id $ Map.lookup k _r
-          lookupField k _r = fromS57Value $ lookupFieldM k _r
-          mkVRPT _r = VRPT { _vrptName = lookupField "*NAME" _r
-                           , _vrptOrientation = lookupField "ORNT" _r
-                           , _vrptUsageIndicator = lookupField "USAG" _r
-                           , _vrptTopologyIndicator = lookupField "TOPI" _r
-                           , _vrptMaskingIndicator = lookupField "MASK" _r
+          _lookupField k _r = fromS57Value $ lookupFieldM k _r
+          mkVRPT _r = VRPT { _vrptName = _lookupField "*NAME" _r
+                           , _vrptOrientation = _lookupField "ORNT" _r
+                           , _vrptUsageIndicator = _lookupField "USAG" _r
+                           , _vrptTopologyIndicator = _lookupField "TOPI" _r
+                           , _vrptMaskingIndicator = _lookupField "MASK" _r
                            }
       in fmap mkVRPT rv
  
 data VRID =
-    VRID { _vridRecordName :: ! RecordName
-         , _vridVersion :: ! Int
+    VRID { _vridVersion :: ! Int
          , _vridUpdateInstruction :: UpdateInstruction
          , _vridATTFs :: ! (Map Int Text)
          , _vridVRPC :: ! (Maybe VRPC)
@@ -81,27 +73,24 @@ data VRID =
          }  deriving (Show, Eq, Data, Typeable)
 makeLenses ''VRID
 
-    
-instance HasRecordName VRID where
-    recordName = vridRecordName
 
 instance FromS57FileRecord VRID where
   fromS57FileRecord r
-    | ((structureFieldName . rootLabel $ r) /= "FRID") = error $ "not an FRID record: " ++ show r
+    | ((structureFieldName . rootLabel $ r) /= "FRID") =
+        error $ "not an FRID record: " ++ show r
     | otherwise =
-        let rv = structureLinearField . rootLabel $ r
-            lookupFieldM k =
-              maybe (error $ "FRID: unable to lookup key " ++ T.unpack k)
-              id $ Map.lookup k rv
-            lookupField k = fromS57Value $ lookupFieldM k
-            rn = RecordName { _rcnm = lookupField "RCNM", _rcid = lookupField "RCID" }
-        in VRID { _vridRecordName = rn
-                , _vridVersion = lookupField "RVER"
-                , _vridUpdateInstruction = lookupField "RUIN"
-                , _vridATTFs = maybe mempty mkAttrs $ lookupChildFieldM "VRID" r "ATTF"
-                , _vridVRPC = fmap readVRPC $ lookupChildFieldM "VRID" r "FFPC"
-                , _vridVRPTs = maybe mempty mkVRPTs $ lookupChildFieldM "VRID" r "VRPT"                             
-                }
+        let rn = RecordName { _rcnm = lookupField r "RCNM"
+                            , _rcid = lookupField r "RCID" }
+            vrid = VRID { _vridVersion = lookupField r "RVER"
+                        , _vridUpdateInstruction = lookupField r "RUIN"
+                        , _vridATTFs = maybe mempty mkAttrs $
+                                       lookupChildFieldM "VRID" r "ATTF"
+                        , _vridVRPC = fmap readVRPC $
+                                      lookupChildFieldM "VRID" r "FFPC"
+                        , _vridVRPTs = maybe mempty mkVRPTs $
+                                       lookupChildFieldM "VRID" r "VRPT"                             
+                        }
+        in Record rn vrid
 
 instance Enum TopologyIndicator where
   toEnum 1 = BeginningNode
@@ -128,9 +117,3 @@ instance FromS57Value TopologyIndicator where
   fromS57Value (S57Int i) = toEnum i
   fromS57Value v = error $ "fromS57Value TopologyIndicator undefined for " ++ show v
  
-
-toVRPC :: S57FileRecord -> Maybe VRPC
-toVRPC r = cast $ (readVRPC r :: VRPC)
-
-isVRPC :: S57FileRecord -> Bool
-isVRPC = maybe False (\_ -> True) . toVRPC

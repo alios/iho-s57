@@ -62,28 +62,25 @@ data DSSI =
        , _dssiFaceRecords :: ! Int
        } deriving (Show, Eq, Data, Typeable)
 makeClassy ''DSSI
-         
-readDSSI r
-    | ((structureFieldName . rootLabel $ r) /= "DSSI") = error $ "not an DSSI record: " ++ show r
-    | otherwise =
-        let rv = structureLinearField . rootLabel $ r
-            lookupFieldM k =
-              maybe (error $ "DSSI: unable to lookup key " ++ T.unpack k)
-              id $ Map.lookup k rv
-            lookupField k = fromS57Value $ lookupFieldM k
-        in   DSSI { _dssiDataStructure = lookupField "DSTR"
-                  , _dssiATTFLexicalLevel = lookupField "AALL"
-                  , _dssiNATFLexicalLevel = lookupField "NALL"
-                  , _dssiMetaRecords = lookupField "NOMR"
-                  , _dssiCartographicRecords = lookupField "NOCR"
-                  , _dssiGeoRecords = lookupField "NOGR"
-                  , _dssiCollectionRecords = lookupField "NOLR"
-                  , _dssiIsolatedNodeRecords = lookupField "NOIN"
-                  , _dssiConnectedNodeRecords = lookupField "NOCN"
-                  , _dssiEdgeRecords = lookupField "NOED"
-                  , _dssiFaceRecords = lookupField "NOFA"
-                  }
 
+readDSSI :: Tree S57Structure -> DSSI
+readDSSI r
+    | ((structureFieldName . rootLabel $ r) /= "DSSI") =
+        error $ "not an DSSI record: " ++ show r
+    | otherwise =
+        DSSI { _dssiDataStructure = lookupField r "DSTR"
+             , _dssiATTFLexicalLevel = lookupField r "AALL"
+             , _dssiNATFLexicalLevel = lookupField r "NALL"
+             , _dssiMetaRecords = lookupField r "NOMR"
+             , _dssiCartographicRecords = lookupField r "NOCR"
+             , _dssiGeoRecords = lookupField r "NOGR"
+             , _dssiCollectionRecords = lookupField r "NOLR"
+             , _dssiIsolatedNodeRecords = lookupField r "NOIN"
+             , _dssiConnectedNodeRecords = lookupField r "NOCN"
+             , _dssiEdgeRecords = lookupField r "NOED"
+             , _dssiFaceRecords = lookupField r "NOFA"
+             }
+        
 
 
 data ExchangePurpose = New | Revision
@@ -142,8 +139,7 @@ instance FromS57Value ApplicationProfile where
 
 
 data DSID =
-  DSID { _dsidRecordName :: ! RecordName
-       , _dsidExchangePurpose :: ! ExchangePurpose
+  DSID { _dsidExchangePurpose :: ! ExchangePurpose
        , _dsidIntendedUsage :: ! Int
        , _dsidDataSetName :: ! Text
        , _dsidEdition :: ! Text
@@ -160,43 +156,32 @@ data DSID =
        } deriving (Show, Eq, Data, Typeable)
 makeLenses ''DSID
 
-instance HasRecordName DSID where
-  recordName = dsidRecordName
-
 instance HasDSSI DSID where
   dSSI = dsidDSSI
 
 instance FromS57FileRecord DSID where
   fromS57FileRecord r
-    | ((structureFieldName . rootLabel $ r) /= "DSID") = error $ "not an DSID record: " ++ show r
+    | ((structureFieldName . rootLabel $ r) /= "DSID") =
+        error $ "not an DSID record: " ++ show r
     | otherwise =
-        let rv = structureLinearField . rootLabel $ r
-            lookupFieldM k =
-              maybe (error $ "DSID: unable to lookup key " ++ T.unpack k)
-              id $ Map.lookup k rv
-            lookupField k = fromS57Value $ lookupFieldM k
-            rn = RecordName { _rcnm = lookupField "RCNM", _rcid = lookupField "RCID" }
-        in   DSID { _dsidRecordName = rn
-                  , _dsidExchangePurpose = lookupField "EXPP"
-                  , _dsidIntendedUsage = lookupField "INTU"
-                  , _dsidDataSetName = lookupField "DSNM"
-                  , _dsidEdition = lookupField "EDTN"
-                  , _dsidUpdate = lookupField "UPDN"
-                  , _dsidUpdateApplicationDate = lookupField "UADT"
-                  , _dsidIssueDate = lookupField "ISDT"
-                  , _dsidS57Edition = lookupField "STED"
-                  , _dsidProductSpecification = lookupField "PRSP"
-                  , _dsidProductSpecificationDescrption = lookupField "PSDN"
-                  , _dsidProductSpecificationEdition = lookupField "PRED"
-                  , _dsidApplicationProfile = lookupField "PROF"
-                  , _dsidProducingAgency = lookupField "AGEN"
-                  , _dsidDSSI = readDSSI $ lookupChildField "DSID" r "DSSI"
-                  }
+        let rn =
+              RecordName { _rcnm = lookupField r "RCNM",
+                           _rcid = lookupField r "RCID" }
+            dsid =
+              DSID { _dsidExchangePurpose = lookupField r "EXPP"
+                   , _dsidIntendedUsage = lookupField r "INTU"
+                   , _dsidDataSetName = lookupField r "DSNM"
+                   , _dsidEdition = lookupField r "EDTN"
+                   , _dsidUpdate = lookupField r "UPDN"
+                   , _dsidUpdateApplicationDate = lookupField r "UADT"
+                   , _dsidIssueDate = lookupField r "ISDT"
+                   , _dsidS57Edition = lookupField r "STED"
+                   , _dsidProductSpecification = lookupField r "PRSP"
+                   , _dsidProductSpecificationDescrption = lookupField r "PSDN"
+                   , _dsidProductSpecificationEdition = lookupField r "PRED"
+                   , _dsidApplicationProfile = lookupField r "PROF"
+                   , _dsidProducingAgency = lookupField r "AGEN"
+                   , _dsidDSSI = readDSSI $ lookupChildField "DSID" r "DSSI"
+                   }
+        in Record rn dsid
 
-
-
-toDSID :: S57FileRecord -> Maybe DSID
-toDSID r = cast $ (fromS57FileRecord r :: DSID)
-
-isDSID :: S57FileRecord -> Bool
-isDSID = maybe False (\_ -> True) . toDSID

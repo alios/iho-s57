@@ -1,6 +1,6 @@
 
 name:          iho-s57
-version:       0.1.1
+version:       0.2.0
 build-type:    Simple
 cabal-version: >= 1.18
 
@@ -19,6 +19,7 @@ library
                      Data.IHO.S57.FRID
                      Data.IHO.S57.VRID
                      Data.IHO.S57.Parser
+                     Data.IHO.S57.Reader
                      Data.IHO.S57.Types
     hs-source-dirs:  library
     build-depends:   base,

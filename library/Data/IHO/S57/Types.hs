@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -27,14 +28,24 @@ data RecordName = RecordName {
   } deriving (Show, Eq, Data, Typeable)
 makeClassy ''RecordName
 
+data Record r = Record {
+  _recName :: RecordName,
+  _recData :: r
+  }
+makeLenses ''Record
+
+instance HasRecordName (Record r) where
+  recordName = recName
 
 type S57FileRecord = Tree S57Structure
 type S57File = [S57FileRecord]
 
-class (Typeable r, HasRecordName r) => FromS57FileRecord r where
-  fromS57FileRecord :: S57FileRecord -> r
+class (Typeable r) => FromS57FileRecord r where
+  fromS57FileDataRecord :: S57FileRecord -> r
+  fromS57FileRecord :: S57FileRecord -> Record r
 
-  
+
+
 instance FromS57Value RecordNameT where
   fromS57Value (S57CharData "DP") = DP
   fromS57Value (S57CharData "CD") = CD
@@ -180,6 +191,14 @@ lookupChildFieldM p n fn =
   case (lookupChildFields p n fn) of
    [] -> Nothing
    (x:_) -> Just x
+
+lookupField :: FromS57Value t => Tree S57Structure -> Text -> t
+lookupField r = 
+  let rv = structureLinearField . rootLabel $ r
+      lookupFieldM k =
+        maybe (error $ "lookupField: unable to lookup key " ++ T.unpack k)
+        id $ Map.lookup k rv
+  in fromS57Value . lookupFieldM 
 
 
 
