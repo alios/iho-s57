@@ -27,7 +27,7 @@ data ReaderState =
               , _frids :: [FRID]
               , _vrids :: [VRID]
               } 
-
+makeLenses ''ReaderState
 
 ddrSink :: (MonadThrow m) => Consumer ByteString m DDR                       
 ddrSink = sinkParser parseDDR
@@ -43,17 +43,30 @@ s57ConduitState :: (MonadState ReaderState m, MonadThrow m) =>
 s57ConduitState = do
   ll <- fmap _lexConfig get
   ddrM <- fmap _ddr get
-  ddr <- case (ddrM) of
+  ddrF <- case (ddrM) of
               Nothing -> do
                 ddr' <- ddrSink
                 modify (\st -> st { _ddr = Just ddr' })
                 return ddr'
               Just ddr' -> return ddr'
-  dr <- fmap (readDRs ddr) $ drSink ddr ll
---  handleRecord dr
+  dr <- fmap (readDRs ddrF) $ drSink ddrF ll
+  handleRecord dr
   yield dr
   s57ConduitState
 
---handleRecord dr = do
-  
-  
+
+handleRecord :: (MonadState ReaderState m) => S57FileRecord -> m ()
+handleRecord dr =
+  let rn = readRecordName dr
+  in case (rn ^. rcnm) of
+      CD -> fail "unexpected CATD record"
+      DP -> do
+        st <- get
+        let dsid' = Just . fromS57FileDataRecord $ dr
+            lexConfig' = (st ^. lexConfig){ lexLevelATTF = 1
+                                          , lexLevelNATF = 1
+                                          }
+        put st { _dsid = dsid'
+               , _lexConfig = lexConfig'
+               }
+      _ -> return ()
