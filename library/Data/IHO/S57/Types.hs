@@ -18,7 +18,7 @@ import qualified Data.Text as T
 import qualified Data.Map as Map
 
 data RecordNameT =
-  CD | DP | FE | IsolatedNode | ConnectedNode | Edge | Face
+  CD | DS | DP | FE | IsolatedNode | ConnectedNode | Edge | Face
   deriving (Show, Eq, Data, Typeable)
 
 
@@ -51,6 +51,7 @@ fromS57FileRecord r =
   in Record rn d
 
 instance FromS57Value RecordNameT where
+  fromS57Value (S57CharData "DS") = DS
   fromS57Value (S57CharData "DP") = DP
   fromS57Value (S57CharData "CD") = CD
   fromS57Value (S57CharData "FE") = FE
@@ -64,13 +65,15 @@ instance FromS57Value RecordNameT where
 
 instance Enum RecordNameT where
   fromEnum CD = error "CD not defined for binary use"
-  fromEnum DP = 10
+  fromEnum DS = 10
+  fromEnum DP = 20  
   fromEnum FE = 100
   fromEnum IsolatedNode = 110
   fromEnum ConnectedNode = 120
   fromEnum Edge = 130
   fromEnum Face = 140
   toEnum 10 = DP
+  toEnum 20 = DS
   toEnum 100 = FE
   toEnum 110 = IsolatedNode
   toEnum 120 = ConnectedNode

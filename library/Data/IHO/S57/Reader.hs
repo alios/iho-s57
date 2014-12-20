@@ -16,6 +16,7 @@ import Data.Tree (Tree)
 import Data.IHO.S57.Types
 import Data.IHO.S57.Parser
 import Data.IHO.S57.DSID
+import Data.IHO.S57.DSPM
 import Data.IHO.S57.FRID
 import Data.IHO.S57.VRID    
 
@@ -34,7 +35,7 @@ ddrSink = sinkParser parseDDR
 
 drSink :: (MonadThrow m) =>
            DDR -> LexLevelConfig -> Consumer ByteString m [S57Structure]
-drSink ddr ll = sinkParser $ parseDR ddr ll
+drSink _ddr ll = sinkParser $ parseDR _ddr ll
 
 
 
@@ -60,7 +61,7 @@ handleRecord dr =
   let rn = readRecordName dr
   in case (rn ^. rcnm) of
       CD -> fail "unexpected CATD record"
-      DP -> do
+      DS -> do
         st <- get
         let dsid' = Just . fromS57FileDataRecord $ dr
             lexConfig' = (st ^. lexConfig){ lexLevelATTF = 1

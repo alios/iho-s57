@@ -16,6 +16,7 @@ library
     exposed-modules: Data.IHO.S57
                      Data.IHO.S57.CATD
                      Data.IHO.S57.DSID
+                     Data.IHO.S57.DSPM
                      Data.IHO.S57.FRID
                      Data.IHO.S57.VRID
                      Data.IHO.S57.Parser

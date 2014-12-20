@@ -6,6 +6,7 @@ import Data.IHO.S57.Types
 import Data.IHO.S57.Parser
 import Data.IHO.S57.CATD
 import Data.IHO.S57.DSID
+import Data.IHO.S57.DSPM
 import Data.IHO.S57.FRID
 import Data.IHO.S57.VRID    
 import Data.Attoparsec.ByteString.Char8 (Parser, parseOnly)
