@@ -3,7 +3,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module Data.IHO.S57.Reader where
+module Data.IHO.S57.Reader (S57Record (..), s57Conduit, s57FileSource) where
 import Control.Lens
 import Control.Monad.Catch
 import Data.ByteString (ByteString)
@@ -11,8 +11,8 @@ import Control.Monad.RWS
 import Data.Conduit
 import Data.Conduit.Lift
 import Data.Conduit.Attoparsec
-import Data.Conduit.Binary
-import Data.Tree (Tree)
+import qualified Data.Conduit.Binary as CB
+import Control.Monad.Trans.Resource
 
 import Data.IHO.S57.Types
 import Data.IHO.S57.Parser
@@ -21,12 +21,28 @@ import Data.IHO.S57.DSPM
 import Data.IHO.S57.FRID
 import Data.IHO.S57.VRID    
 
+data S57Record =
+  RecordDSID DSID |
+  RecordDSPM DSPM |
+  RecordVRID VRID |
+  RecordFRID FRID 
+  deriving (Show, Eq)
 
 data ReaderState =
   ReaderState { _ddr :: Maybe DDR
               , _lexConfig :: LexLevelConfig
               } 
 makeLenses ''ReaderState
+
+s57Conduit :: (MonadThrow m) => Conduit ByteString m S57Record
+s57Conduit =
+  evalStateLC (ReaderState Nothing defaultLexLevelConfig) $ s57ConduitS
+
+s57FileSource :: (MonadResource m, MonadThrow m) =>
+                 FilePath -> Source m S57Record
+s57FileSource fp = CB.sourceFile fp  $= s57Conduit
+
+
 
 ddrSink :: (MonadThrow m) => Consumer ByteString m DDR                       
 ddrSink = sinkParser parseDDR
@@ -36,22 +52,13 @@ drSink :: (MonadThrow m) =>
 drSink _ddr ll = sinkParser $ parseDR _ddr ll
 
 
-data S57Record =
-  RecordDSID DSID |
-  RecordDSPM DSPM |
-  RecordVRID VRID |
-  RecordFRID FRID 
-  deriving (Show, Eq)
            
-s57Conduit :: (MonadThrow m) => Conduit ByteString m S57Record
-s57Conduit =
-  evalStateLC (ReaderState Nothing defaultLexLevelConfig) $ s57ConduitS
 
 s57ConduitS :: (MonadState ReaderState m, MonadThrow m) =>
                Conduit ByteString m S57Record
 s57ConduitS = do
   ll <- fmap _lexConfig get
-  ddrM <- fmap _ddr get
+  ddrM <- fmap (view ddr) get
   ddrF <- case (ddrM) of
               Nothing -> do
                 ddr' <- ddrSink
