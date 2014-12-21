@@ -23,10 +23,7 @@ import Data.IHO.S57.VRID
 
 data ReaderState =
   ReaderState { _ddr :: Maybe DDR
-              , _dsid :: Maybe DSID
               , _lexConfig :: LexLevelConfig
-              , _frids :: [FRID]
-              , _vrids :: [VRID]
               } 
 makeLenses ''ReaderState
 
@@ -63,11 +60,21 @@ handleRecord dr =
       CD -> fail "unexpected CATD record"
       DS -> do
         st <- get
-        let dsid' = Just . fromS57FileDataRecord $ dr
-            lexConfig' = (st ^. lexConfig){ lexLevelATTF = 1
-                                          , lexLevelNATF = 1
+        let dsid' = fromS57FileDataRecord $ dr
+            dssi' = dsid' ^. dsidDSSI
+            lexConfig' = (st ^. lexConfig){ lexLevelATTF =
+                                               dssi' ^. dssiATTFLexicalLevel
+                                          , lexLevelNATF =
+                                               dssi' ^. dssiNATFLexicalLevel
                                           }
-        put st { _dsid = dsid'
-               , _lexConfig = lexConfig'
-               }
+        put st { _lexConfig = lexConfig' }
+      DP -> do
+        st <- get
+        let dspm' = fromS57FileDataRecord $ dr
+            lexConfig' = (st ^. lexConfig){ lexLevelCoordinateMulFactor =
+                                               dspm' ^. dspmCoordinateMulFactor,
+                                            lexLevelSoundingMulFactor =
+                                              dspm' ^. dspmSoundingMulFactor
+                                          }
+        put st { _lexConfig = lexConfig' }
       _ -> return ()

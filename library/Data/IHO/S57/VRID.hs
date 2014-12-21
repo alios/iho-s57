@@ -63,16 +63,47 @@ mkVRPTs r
                            , _vrptMaskingIndicator = _lookupField "MASK" _r
                            }
       in fmap mkVRPT rv
- 
+
+data SGCC =
+  SGCC { _sgccUpdateInstruction :: ! UpdateInstruction
+       , _sgccCoordinateIndex :: ! Int
+       , _sgccCoordinates :: ! Int
+       } deriving (Show, Eq, Data, Typeable)
+makeLenses ''SGCC
+
+readSGCC :: Tree S57Structure -> SGCC
+readSGCC r
+    | ((structureFieldName . rootLabel $ r) /= "SGCC") =
+        error $ "not an SGCC record: " ++ show r
+    | otherwise =
+        SGCC { _sgccUpdateInstruction = lookupField r "CCUI"
+             , _sgccCoordinateIndex = lookupField r "CCIX"
+             , _sgccCoordinates = lookupField r "CCNC"
+             }
+
+mkSG2Ds :: S57FileRecord -> [(Double, Double)]
+mkSG2Ds = 
+  let mkSG2D lf _r = (lf "*YCOO" _r, lf "XCOO" _r)
+  in mkTuples "mkSG2D" mkSG2D 
+
+mkSG3Ds :: S57FileRecord -> [(Double, Double, Double)]
+mkSG3Ds = 
+  let mkSG3D lf _r = (lf "*YCOO" _r, lf "XCOO" _r, lf "VE3D" _r)
+  in mkTuples "mkSG3D" mkSG3D 
+
+
+         
 data VRID =
     VRID { _vridVersion :: ! Int
          , _vridUpdateInstruction :: UpdateInstruction
          , _vridATTFs :: ! (Map Int Text)
          , _vridVRPC :: ! (Maybe VRPC)
-         , _vridVRPTs :: ! [VRPT]                       
+         , _vridVRPTs :: ! [VRPT]
+         , _vridSGCC :: ! (Maybe SGCC)
+         , _vridSG2Ds :: ! [(Double, Double)]
+         , _vridSG3Ds :: ! [(Double, Double, Double)]
          }  deriving (Show, Eq, Data, Typeable)
 makeLenses ''VRID
-
 
 instance FromS57FileRecord VRID where
   fromS57FileDataRecord r
@@ -87,6 +118,12 @@ instance FromS57FileRecord VRID where
                            lookupChildFieldM "VRID" r "FFPC"
              , _vridVRPTs = maybe mempty mkVRPTs $
                             lookupChildFieldM "VRID" r "VRPT"         
+             , _vridSGCC = fmap readSGCC $
+                           lookupChildFieldM "VRID" r "SGCC"
+             , _vridSG2Ds = maybe mempty mkSG2Ds $ 
+                            lookupChildFieldM "VRID" r "SG2D"
+             , _vridSG3Ds = maybe mempty mkSG3Ds $ 
+                            lookupChildFieldM "VRID" r "SG3D"
              }
 
 instance Enum TopologyIndicator where

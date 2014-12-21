@@ -40,10 +40,20 @@ data LexLevelConfig =
   LexLevelConfig {
     lexLevelDefault :: Int,
     lexLevelATTF :: Int,
-    lexLevelNATF :: Int
+    lexLevelNATF :: Int,
+    lexLevelCoordinateMulFactor :: Int,
+    lexLevelSoundingMulFactor :: Int
     }
 
-defaultLexLevelConfig = LexLevelConfig 0 1 1
+defaultLexLevelConfig :: LexLevelConfig 
+defaultLexLevelConfig = LexLevelConfig {
+  lexLevelDefault = 0,
+  lexLevelATTF = error "ATTF lex level not set",
+  lexLevelNATF = error "NATF lex level not set",
+  lexLevelCoordinateMulFactor = 1,
+  lexLevelSoundingMulFactor = 1
+  }
+                 
 
 parseS57File :: Parser S57File
 parseS57File = do

@@ -102,6 +102,7 @@ instance FromS57Value Int where
 
 instance FromS57Value Double where
   fromS57Value (S57Real t) = t
+  fromS57Value (S57Int t) = fromIntegral t
   fromS57Value t = error $ "unable to convert value to Double: " ++ show t
 
 instance FromS57Value ByteString where
@@ -159,6 +160,7 @@ data MaskingIndicator
   deriving (Show, Eq, Data, Typeable)
 
 
+
 mkAttrs :: S57FileRecord -> Map Int Text
 mkAttrs r =
   let rv = structureMultiField . rootLabel $ r
@@ -168,6 +170,15 @@ mkAttrs r =
       _lookupField k _r = fromS57Value $ lookupFieldM k _r
       mkATTF _r = (_lookupField "*ATTL" _r, _lookupField "ATVL" _r)
   in Map.fromList $ fmap mkATTF rv
+
+
+mkTuples txt mkTuple r =
+  let rv = structureMultiField . rootLabel $ r
+      lookupFieldM k _r =
+        maybe (error $ txt ++ ": unable to lookup key " ++ T.unpack k)
+        id $ Map.lookup k _r
+      _lookupField k _r = fromS57Value $ lookupFieldM k _r
+  in fmap (mkTuple _lookupField) rv
 
 
 dropISO :: S57FileRecord -> S57FileRecord
