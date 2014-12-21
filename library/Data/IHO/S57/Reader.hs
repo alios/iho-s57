@@ -39,8 +39,8 @@ s57Conduit =
   evalStateLC (ReaderState Nothing defaultLexLevelConfig) $ s57ConduitS
 
 s57FileSource :: (MonadResource m, MonadThrow m) =>
-                 FilePath -> Source m S57Record
-s57FileSource fp = CB.sourceFile fp  $= s57Conduit
+                 FilePath -> Producer m S57Record
+s57FileSource fp = toProducer $ (CB.sourceFile fp  $= s57Conduit)
 
 
 
