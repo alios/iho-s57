@@ -3,8 +3,11 @@
 module Data.IHO.S57 where
 
 import Data.Conduit
+import Data.Text (Text)
 import qualified Data.Conduit.Binary as CB
 import qualified Data.Conduit.List as CL
+import qualified Data.Conduit.Text as CT
+import qualified Data.Text as T
 import Data.ByteString (ByteString)
 import Data.IHO.S57.Types
 import Data.IHO.S57.Parser
@@ -20,18 +23,18 @@ srcFile = CB.sourceFile
 s57src :: (MonadResource m, MonadThrow m) => Producer m S57Record
 s57src = srcFile $= s57Conduit
 
-groomRecord :: Monad m => Conduit S57Record m String
+groomRecord :: Monad m => Conduit S57Record m Text
 groomRecord = do
   v <- await
   case v of
    Just r ->
-     do yield $ groom r
+     do yield $ T.pack $ groom r ++ "\n"
         groomRecord
    Nothing -> return ()
 
 main :: IO ()
 main = runResourceT $ 
-  s57src $= groomRecord $$ CL.mapM_ $ liftIO . putStrLn
+  s57src $= groomRecord =$= CT.encode CT.utf8 $$ CB.sinkFile "/tmp/foo.txt"
 
 {-
 parseCatalogFile :: Parser [CATD]

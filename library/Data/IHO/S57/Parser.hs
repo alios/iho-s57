@@ -54,7 +54,7 @@ defaultLexLevelConfig = LexLevelConfig {
   lexLevelSoundingMulFactor = 1
   }
                  
-
+{-
 parseS57File :: Parser S57File
 parseS57File = do
   rs <- parseS57File'
@@ -82,7 +82,7 @@ parseS57File' = do
   return $ fmap (readDRs ddr) (dr0':drs)
 
 
-
+-}
 
 
 ddrLookup' fn ddr = do
@@ -153,19 +153,24 @@ parseDDR = do
     _ddrFieldInfo = Map.fromList $ fs
     }
 
-
+{-
 parseDRs ddr ll = do
   done <- atEnd
   if (done) then return []
     else do dr <- parseDR ddr ll
             drs <- parseDRs ddr ll
             return (dr:drs)
+-}
 
+parseDR :: DDR -> LexLevelConfig -> Parser (Maybe [S57Structure])
 parseDR ddr ll = do
-  (baseAddr, lengthL, posL) <- parseDRLeader
-  dir <- (parseDirectoryEntry tagL lengthL posL) `manyTill` parseFT
-  fs <- parseDirectory dir
-  return (fmap (parseDRField ll ddr) fs)
+  done <- atEnd
+  if (done) then return Nothing
+    else do 
+    (baseAddr, lengthL, posL) <- parseDRLeader
+    dir <- (parseDirectoryEntry tagL lengthL posL) `manyTill` parseFT
+    fs <- parseDirectory dir
+    return . Just $ (fmap (parseDRField ll ddr) fs)
 
 
 

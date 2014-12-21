@@ -32,7 +32,7 @@ ddrSink :: (MonadThrow m) => Consumer ByteString m DDR
 ddrSink = sinkParser parseDDR
 
 drSink :: (MonadThrow m) =>
-           DDR -> LexLevelConfig -> Consumer ByteString m [S57Structure]
+           DDR -> LexLevelConfig -> Consumer ByteString m (Maybe [S57Structure])
 drSink _ddr ll = sinkParser $ parseDR _ddr ll
 
 
@@ -58,10 +58,14 @@ s57ConduitS = do
                 modify (\st -> st { _ddr = Just ddr' })
                 return ddr'
               Just ddr' -> return ddr'
-  dr <- fmap (dropISO . readDRs ddrF) $ drSink ddrF ll
-  r <- handleRecord dr
-  yield r
-  s57ConduitS
+  drM <- drSink ddrF ll
+  case drM of
+   Nothing -> return ()
+   Just dr' ->
+     let dr = dropISO . readDRs ddrF $  dr'
+     in do r <- handleRecord dr
+           yield r
+           s57ConduitS
 
 
 handleRecord :: (MonadState ReaderState m) => S57FileRecord -> m S57Record
