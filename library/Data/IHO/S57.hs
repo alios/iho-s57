@@ -2,16 +2,36 @@
 
 module Data.IHO.S57 where
 
+import Data.Conduit
+import qualified Data.Conduit.Binary as CB
+import qualified Data.Conduit.List as CL
+import Data.ByteString (ByteString)
 import Data.IHO.S57.Types
 import Data.IHO.S57.Parser
-import Data.IHO.S57.CATD
-import Data.IHO.S57.DSID
-import Data.IHO.S57.DSPM
-import Data.IHO.S57.FRID
-import Data.IHO.S57.VRID    
-import Data.Attoparsec.ByteString.Char8 (Parser, parseOnly)
-import qualified Data.ByteString as BS
+import Data.IHO.S57.Reader
 import Text.Groom
+import Control.Monad.Trans.Resource
+import Control.Monad.IO.Class
+
+srcFile :: MonadResource m => Producer m ByteString
+srcFile = CB.sourceFile
+          "/home/alios/Documents/IHO/data/NOAA/ENC_ROOT/US5FL62M/US5FL62M.000"
+
+s57src :: (MonadResource m, MonadThrow m) => Producer m S57Record
+s57src = srcFile $= s57Conduit
+
+groomRecord :: Monad m => Conduit S57Record m String
+groomRecord = do
+  v <- await
+  case v of
+   Just r ->
+     do yield $ groom r
+        groomRecord
+   Nothing -> return ()
+
+main :: IO ()
+main = runResourceT $ 
+  s57src $= groomRecord $$ CL.mapM_ $ liftIO . putStrLn
 
 {-
 parseCatalogFile :: Parser [CATD]

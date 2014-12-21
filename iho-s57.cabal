@@ -36,6 +36,8 @@ library
                      groom,
                      conduit >= 1.2,
                      conduit-extra >= 1.1,
+                     resourcet >= 1.1,
+                     transformers >= 0.3,
                      async >= 2
 
     ghc-prof-options: -auto-all -prof

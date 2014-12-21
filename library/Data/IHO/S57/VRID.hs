@@ -107,8 +107,8 @@ makeLenses ''VRID
 
 instance FromS57FileRecord VRID where
   fromS57FileDataRecord r
-    | ((structureFieldName . rootLabel $ r) /= "FRID") =
-        error $ "not an FRID record: " ++ show r
+    | ((structureFieldName . rootLabel $ r) /= "VRID") =
+        error $ "not an VRID record: " ++ show r
     | otherwise =
         VRID { _vridVersion = lookupField r "RVER"
              , _vridUpdateInstruction = lookupField r "RUIN"
