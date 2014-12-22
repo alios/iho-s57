@@ -13,9 +13,12 @@ import Data.Typeable (Typeable)
 import Data.Text (Text)
 import Data.Tree
 import Data.ByteString (ByteString)
+import qualified Data.ByteString.Lazy as BL
 import Data.Map (Map)
 import qualified Data.Text as T
 import qualified Data.Map as Map
+import Data.Binary.Get
+
 
 data RecordNameT =
   CD | DS | DP | FE | IsolatedNode | ConnectedNode | Edge | Face
@@ -226,21 +229,17 @@ readRecordName r =
   RecordName { _rcnm = lookupField r "RCNM"
              , _rcid = lookupField r "RCID" }
 
-instance Enum Orientation where
-  toEnum 1 = Forward
-  toEnum 2 = Reverse
-  toEnum 255 = NullOrientation
-  toEnum t = error $ "toEnum: " ++ show t ++ " is not a Orientation"
-  fromEnum Forward = 1
-  fromEnum Reverse = 2
-  fromEnum NullOrientation = 255
 
-instance FromS57Value Orientation where
-  fromS57Value (S57CharData "F") = Forward
-  fromS57Value (S57CharData "R") = Reverse
-  fromS57Value (S57CharData "N") = NullOrientation
-  fromS57Value (S57Int i) = toEnum i
-  fromS57Value v = error $ "fromS57Value Orientation undefined for " ++ show v
+instance FromS57Value RecordName where
+  fromS57Value (S57Bits bs) =
+    let getRNFs = runGet $ do
+          a <- getWord8
+          b <- getWord32le
+          return (toEnum $ fromIntegral a, fromIntegral b)
+        (rn, rid) = getRNFs $ BL.fromStrict bs
+    in RecordName { _rcnm = rn, _rcid = rid }
+  fromS57Value v = error $ "fromS57Value UsageIndicator undefined for " ++ show v
+  
 
 
 instance Enum UsageIndicator where
@@ -289,3 +288,19 @@ instance Enum UpdateInstruction where
   fromEnum Insert = 1
   fromEnum Delete = 2
   fromEnum Modify = 3
+
+
+instance Enum Orientation where
+  toEnum 1 = Forward
+  toEnum 2 = Reverse
+  toEnum 255 = NullOrientation
+  toEnum t = error $ "toEnum: " ++ show t ++ " is not a Orientation"
+  fromEnum Forward = 1
+  fromEnum Reverse = 2
+  fromEnum NullOrientation = 255
+
+instance FromS57Value Orientation where
+  fromS57Value (S57CharData "F") = Forward
+  fromS57Value (S57CharData "R") = Reverse
+  fromS57Value (S57Int i) = toEnum i
+  fromS57Value v = error $ "fromS57Value Orientation undefined for " ++ show v

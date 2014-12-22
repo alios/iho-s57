@@ -99,7 +99,7 @@ readFSPC r
              }
 
 data FSPT =
-  FSPT { _fsptName :: ! ByteString
+  FSPT { _fsptName :: ! RecordName
        , _fsptOrientation :: ! Orientation
        , _fsptUsageIndicator :: ! UsageIndicator
        , _fsptMaskingIndicator :: ! MaskingIndicator

@@ -40,7 +40,7 @@ data TopologyIndicator
 
                
 data VRPT =
-  VRPT { _vrptName :: ! ByteString
+  VRPT { _vrptName :: ! RecordName
        , _vrptOrientation :: ! Orientation
        , _vrptUsageIndicator :: ! UsageIndicator
        , _vrptTopologyIndicator :: ! TopologyIndicator
