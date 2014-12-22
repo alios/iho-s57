@@ -38,4 +38,4 @@ fileOutput fp = CT.encode CT.utf8 =$ CB.sinkFile fp
 
 main :: IO ()
 main = runResourceT $ 
-  s57src $= showRecord $$ fileOutput "/tmp/foo.txt"
+  s57src $= groomRecord $$ fileOutput "/tmp/foo.txt"

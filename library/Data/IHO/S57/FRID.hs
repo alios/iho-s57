@@ -7,14 +7,13 @@ module Data.IHO.S57.FRID where
 import Control.Lens
 import Data.Text (Text)
 import Data.Data (Data)
-import Data.Typeable (Typeable, cast)
+import Data.Typeable (Typeable)
 import Data.Tree
 import qualified Data.Map as Map
 import qualified Data.Text as T
 import Data.IHO.S57.Types
 import Data.Map (Map)
 import Data.Monoid
-import Data.ByteString (ByteString)
 
 data FOID =
   FOID { _foidProducingAgency :: ! Int
@@ -58,7 +57,7 @@ data RelationShipIndicator =
 
 
 data FFPT =
-  FFPT { _ffptLongName :: ! ByteString
+  FFPT { _ffptLongName :: ! RecordName
        , _ffptRelationShipIndicator :: ! RelationShipIndicator
        , _ffptComment :: ! Text
        } deriving (Show, Eq, Data, Typeable)
@@ -126,7 +125,8 @@ data GeometricPrimitive = Point | Line | Area | NoRef
   deriving (Show, Eq, Data, Typeable)
 
 data FRID =
-  FRID { _fridGeometricPrimtive :: ! GeometricPrimitive
+  FRID { _fridRecordName :: ! RecordName
+       , _fridGeometricPrimtive :: ! GeometricPrimitive
        , _fridGroup :: ! (Maybe Int)
        , _fridObjectLabel :: ! Int
        , _fridVersion :: ! Int
@@ -143,14 +143,20 @@ makeLenses ''FRID
 
 instance HasFOID FRID where
   fOID = fridFOID
-  
+
+instance HasRecordName FRID where
+  recordName = fridRecordName
+
 instance FromS57FileRecord FRID where
   fromS57FileDataRecord r
     | ((structureFieldName . rootLabel $ r) /= "FRID") =
         error $ "not an FRID record: " ++ show r
     | otherwise =
         let groupV = lookupField r "GRUP"
-        in FRID { _fridGeometricPrimtive = lookupField r "PRIM"
+        in FRID { _fridRecordName = RecordName {
+                     _rcnm = lookupField r "RCNM",
+                     _rcid = lookupField r "RCID" }
+                , _fridGeometricPrimtive = lookupField r "PRIM"
                 , _fridGroup = if ((groupV >= 1) && (groupV <=254))
                                then Just groupV else Nothing
                 , _fridObjectLabel = lookupField r "OBJL"

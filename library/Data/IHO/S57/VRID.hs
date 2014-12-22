@@ -7,15 +7,13 @@ module Data.IHO.S57.VRID where
 import Control.Lens
 import Data.Text (Text)
 import Data.Data (Data)
-import Data.Typeable (Typeable, cast)
+import Data.Typeable (Typeable)
 import Data.Tree
 import qualified Data.Map as Map
 import qualified Data.Text as T
 import Data.IHO.S57.Types
 import Data.Map (Map)
 import Data.Monoid
-import Data.ByteString (ByteString)
-
 
 data VRPC =
   VRPC { _vrpcUpdateInstruction :: ! UpdateInstruction
@@ -94,7 +92,8 @@ mkSG3Ds =
 
          
 data VRID =
-    VRID { _vridVersion :: ! Int
+    VRID { _vridRecordName :: ! RecordName
+         , _vridVersion :: ! Int
          , _vridUpdateInstruction :: UpdateInstruction
          , _vridATTFs :: ! (Map Int Text)
          , _vridVRPC :: ! (Maybe VRPC)
@@ -110,7 +109,10 @@ instance FromS57FileRecord VRID where
     | ((structureFieldName . rootLabel $ r) /= "VRID") =
         error $ "not an VRID record: " ++ show r
     | otherwise =
-        VRID { _vridVersion = lookupField r "RVER"
+        VRID { _vridRecordName = RecordName {
+                  _rcnm = lookupField r "RCNM",
+                  _rcid = lookupField r "RCID" }
+             , _vridVersion = lookupField r "RVER"
              , _vridUpdateInstruction = lookupField r "RUIN"
              , _vridATTFs = maybe mempty mkAttrs $
                             lookupChildFieldM "VRID" r "ATTF"
@@ -125,6 +127,9 @@ instance FromS57FileRecord VRID where
              , _vridSG3Ds = maybe mempty mkSG3Ds $ 
                             lookupChildFieldM "VRID" r "SG3D"
              }
+
+instance HasRecordName VRID where
+  recordName = vridRecordName
 
 instance Enum TopologyIndicator where
   toEnum 1 = BeginningNode
