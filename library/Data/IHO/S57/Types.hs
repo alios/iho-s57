@@ -277,6 +277,18 @@ updatePointerFields pui pidx pn g v r vrpc =
                           ,drop (upP + upN ) rpts'] 
 
 
+pointerUpdateApplyable :: Getting (Maybe a) s (Maybe a)
+                       -> Getting [t] s [t]
+                       -> s -> Maybe a
+pointerUpdateApplyable updateInst updateVal r =
+  let updateable =
+        case (r ^. updateInst, r ^. updateVal) of
+         (Nothing, _) -> Nothing
+         (Just _, []) -> Nothing
+         (Just ccj, _) -> Just ccj
+  in updateable
+
+
 
 instance FromS57Value RecordName where
   fromS57Value (S57Bits bs) =

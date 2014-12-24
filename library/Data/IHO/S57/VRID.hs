@@ -145,9 +145,12 @@ vridUpsert tbl v =
              (error $ "vridUpdate: MODIFY for non existing record: " ++
               show rn) id $ lookupVrid tbl rn
          attfs = updateATTFs (r ^. vridATTFs) $ Map.toList $ v ^. vridATTFs
-         vrpts = maybe (r ^. vridVRPTs) (updateVRPTs v r) (v ^. vridVRPC)
-         sg2ds = maybe (r ^. vridSG2Ds) (updateSG2Ds v r) (v ^. vridSGCC)
-         sg3ds = maybe (r ^. vridSG3Ds) (updateSG3Ds v r) (v ^. vridSGCC)
+         vrpts = maybe (v ^. vridVRPTs) (updateVRPTs v r) $
+                 pointerUpdateApplyable vridVRPC vridVRPTs r     
+         sg2ds = maybe (v ^. vridSG2Ds) (updateSG2Ds v r) $
+                 pointerUpdateApplyable vridSGCC vridSG2Ds r     
+         sg3ds = maybe (v ^. vridSG3Ds) (updateSG3Ds v r) $
+                 pointerUpdateApplyable vridSGCC vridSG2Ds r         
          r' = r { _vridVersion = rv                
                 , _vridATTFs = attfs
                 , _vridVRPTs = vrpts
