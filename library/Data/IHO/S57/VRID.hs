@@ -133,7 +133,8 @@ vridTableEmpty = EmptyTable
 vridUpsert :: Table VRID -> VRID -> Table VRID
 vridUpsert tbl v =
   let rv = v ^. vridVersion
-  in case (v ^. vridUpdateInstruction) of
+      vui = v ^. vridUpdateInstruction
+  in case (vui) of
    Insert ->
      if (rv /= 1)
      then error $ "vridUpsert: INSERT record with version != 1: " ++ show v
@@ -151,7 +152,8 @@ vridUpsert tbl v =
                  pointerUpdateApplyable vridSGCC vridSG2Ds r     
          sg3ds = maybe (v ^. vridSG3Ds) (updateSG3Ds v r) $
                  pointerUpdateApplyable vridSGCC vridSG2Ds r         
-         r' = r { _vridVersion = rv                
+         r' = r { _vridVersion = rv
+                , _vridUpdateInstruction = vui
                 , _vridATTFs = attfs
                 , _vridVRPTs = vrpts
                 , _vridSG2Ds = sg2ds

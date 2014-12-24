@@ -37,6 +37,7 @@ library
                      conduit-extra >= 1.1,
                      resourcet >= 1.1,
                      transformers >= 0.3,
+                     groom,
                      async >= 2
 
     ghc-prof-options: -auto-all -prof
@@ -49,6 +50,8 @@ executable test
                      conduit-extra,
                      resourcet,
                      text,
+                     lens,
+                     tables,
                      groom
     main-is:         Main.hs
     ghc-options:      -threaded -O2 -Wall

@@ -111,7 +111,7 @@ instance FromS57Value Double where
 
 instance FromS57Value ByteString where
   fromS57Value (S57Bits t) = t
-  fromS57Value t = error $ "unable to convert value to Double: " ++ show t
+  fromS57Value t = error $ "unable to convert value to ByteString: " ++ show t
 
 
 

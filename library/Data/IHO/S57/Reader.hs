@@ -2,8 +2,14 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 
-module Data.IHO.S57.Reader (S57Record (..), s57Conduit, s57FileSource) where
+module Data.IHO.S57.Reader
+       ( S57DataSet (..), dataSetVRIDTable
+       , S57Record (..)      
+       , s57Conduit
+       , s57FileSource
+       , s57readDataSet) where
 import Control.Lens
 import Control.Monad.Catch
 import Data.ByteString (ByteString)
@@ -13,7 +19,8 @@ import Data.Conduit.Lift
 import Data.Conduit.Attoparsec
 import qualified Data.Conduit.Binary as CB
 import Control.Monad.Trans.Resource
-
+import Data.Table
+import Data.Typeable (Typeable)
 
 import Data.IHO.S57.Types
 import Data.IHO.S57.Parser
@@ -35,15 +42,6 @@ data ReaderState =
               } 
 makeLenses ''ReaderState
 
-s57Conduit :: (MonadThrow m) => Conduit ByteString m S57Record
-s57Conduit =
-  evalStateLC (ReaderState Nothing defaultLexLevelConfig) $ s57ConduitS
-
-s57FileSource :: (MonadResource m, MonadThrow m) =>
-                 FilePath -> Producer m S57Record
-s57FileSource fp = toProducer $ (CB.sourceFile fp  $= s57Conduit)
-
-
 
 ddrSink :: (MonadThrow m) => Consumer ByteString m DDR                       
 ddrSink = sinkParser parseDDR
@@ -53,8 +51,27 @@ drSink :: (MonadThrow m) =>
 drSink _ddr ll = sinkParser $ parseDR _ddr ll
 
 
-           
+data S57DataSet =
+  S57DataSet { _dataSetVRIDTable :: Table VRID
+          } deriving (Show, Eq, Typeable)
+makeLenses ''S57DataSet
 
+s57readDataSet :: (Monad m) => Consumer S57Record m S57DataSet
+s57readDataSet = readDataSet' $
+              S57DataSet { _dataSetVRIDTable = EmptyTable }
+
+readDataSet' :: (Monad m) => S57DataSet -> Consumer S57Record m S57DataSet
+readDataSet' ds = do
+  v <- await
+  let ds' = case v of
+        Nothing -> Nothing
+        Just (RecordVRID r) -> Just
+          ds { _dataSetVRIDTable = vridUpsert (ds ^. dataSetVRIDTable) r }
+        _ -> Just ds   
+  case ds' of
+    Nothing -> return ds
+    Just ds_ -> readDataSet' ds_
+     
 s57ConduitS :: (MonadState ReaderState m, MonadThrow m) =>
                Conduit ByteString m S57Record
 s57ConduitS = do
@@ -75,6 +92,11 @@ s57ConduitS = do
            yield r
            s57ConduitS
 
+
+
+s57Conduit :: (MonadThrow m) => Conduit ByteString m S57Record
+s57Conduit =
+  evalStateLC (ReaderState Nothing defaultLexLevelConfig) $ s57ConduitS
 
 handleRecord :: (MonadState ReaderState m) => S57FileRecord -> m S57Record
 handleRecord dr =
@@ -119,3 +141,6 @@ handleRecord dr =
       FE -> return . RecordFRID . fromS57FileDataRecord $ dr
 
    
+s57FileSource :: (MonadResource m, MonadThrow m) =>
+                 FilePath -> Producer m S57Record
+s57FileSource fp = toProducer $ (CB.sourceFile fp  $= s57Conduit)

@@ -9,7 +9,8 @@ import qualified Data.Text as T
 import Data.IHO.S57.Reader
 import Text.Groom
 import Control.Monad.Trans.Resource
-
+import Control.Lens
+import Data.Table
 
 s57src :: MonadResource m => Source m S57Record
 s57src = s57FileSource
@@ -37,5 +38,8 @@ fileOutput :: (MonadThrow m, MonadResource m) => FilePath -> Sink Text m ()
 fileOutput fp = CT.encode CT.utf8 =$ CB.sinkFile fp 
 
 main :: IO ()
-main = runResourceT $ 
-  s57src $= groomRecord $$ fileOutput "/tmp/foo.txt"
+main = do
+  ds <- runResourceT $ s57src $$ s57readDataSet
+  let vs = (ds ^. dataSetVRIDTable ^. from table)
+  _ <- sequence $ fmap (putStrLn . groom) vs
+  return ()
