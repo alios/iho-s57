@@ -175,6 +175,12 @@ mkAttrs r =
   in Map.fromList $ fmap mkATTF rv
 
 
+mkTuples ::
+  FromS57Value t =>
+  String
+  -> ((Text -> Map Text S57Value -> t) -> Map Text S57Value -> b)
+  -> Tree S57Structure
+  -> [b]
 mkTuples txt mkTuple r =
   let rv = structureMultiField . rootLabel $ r
       lookupFieldM k _r =
@@ -242,15 +248,15 @@ s57deleteChar = error "s57deleteChar is undefined yet"
 
 updatePointerFields ::
   Show a =>
-  Getting [b] a [b]
+  Getting UpdateInstruction s UpdateInstruction
   -> Getting Int s Int
   -> Getting Int s Int
-  -> Getting UpdateInstruction s UpdateInstruction
+  -> Getting [b] a [b]
+  -> a
+  -> a
   -> s
-  -> a
-  -> a
   -> [b]
-updatePointerFields g pidx pn pui vrpc v r = 
+updatePointerFields pui pidx pn g v r vrpc = 
   let upP = vrpc ^. pidx 
       upN = vrpc ^. pn
       rpcUI = vrpc ^. pui

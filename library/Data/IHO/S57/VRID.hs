@@ -140,32 +140,43 @@ vridUpsert tbl v =
      else insert v tbl
    Delete -> delete v tbl
    Modify ->
-     case (v ^. vridVRPC) of
-      Nothing -> error $ "vridUpdate: MODIFY record with no VRPC set: " ++ show v
-      Just vrpc ->
-        let rn = v ^. recordName            
-            r = maybe
-                (error $ "vridUpdate: MODIFY for non existing record: " ++
-                 show rn) id $ lookupVrid tbl rn
-            attfs = updateATTFs (r ^. vridATTFs) $ Map.toList $ v ^. vridATTFs
-            vrpts = updateVRPTs vrpc v r
-            r' = r { _vridVersion = rv
-                   , _vridATTFs = attfs
-                   , _vridVRPTs = vrpts
-                   }
-        in if (rv <= (r ^.vridVersion))          
-           then error $ "vridUpdate: MODIFY must have a version >= " ++ show rv 
-           else insert r' tbl
+     let rn = v ^. recordName            
+         r = maybe
+             (error $ "vridUpdate: MODIFY for non existing record: " ++
+              show rn) id $ lookupVrid tbl rn
+         attfs = updateATTFs (r ^. vridATTFs) $ Map.toList $ v ^. vridATTFs
+         vrpts = maybe (r ^. vridVRPTs) (updateVRPTs v r) (v ^. vridVRPC)
+         sg2ds = maybe (r ^. vridSG2Ds) (updateSG2Ds v r) (v ^. vridSGCC)
+         sg3ds = maybe (r ^. vridSG3Ds) (updateSG3Ds v r) (v ^. vridSGCC)
+         r' = r { _vridVersion = rv                
+                , _vridATTFs = attfs
+                , _vridVRPTs = vrpts
+                , _vridSG2Ds = sg2ds
+                , _vridSG3Ds = sg3ds
+                }
+     in if (rv <= (r ^.vridVersion))          
+        then error $ "vridUpdate: MODIFY must have a version >= " ++ show rv 
+        else insert r' tbl
 
 
-
-
-updateVRPTs :: VRPC -> VRID -> VRID -> [VRPT]
-updateVRPTs = updatePointerFields vridVRPTs
+updateVRPTs :: VRID -> VRID -> VRPC -> [VRPT]
+updateVRPTs = updatePointerFields 
+              vrpcUpdateInstruction
               vrpcObjectPointerIndex
               vrpcObjectPointers
-              vrpcUpdateInstruction
+              vridVRPTs
 
+updateBySGCC :: Getting [b] VRID [b] -> VRID -> VRID -> SGCC -> [b]
+updateBySGCC = updatePointerFields
+               sgccUpdateInstruction
+               sgccCoordinateIndex
+               sgccCoordinates
+
+updateSG2Ds :: VRID -> VRID -> SGCC -> [(Double, Double)]
+updateSG2Ds = updateBySGCC vridSG2Ds
+
+updateSG3Ds :: VRID -> VRID -> SGCC -> [(Double, Double, Double)]
+updateSG3Ds = updateBySGCC vridSG3Ds
 
 lookupVrid :: Table VRID -> RecordName -> Maybe VRID
 lookupVrid tbl rn =
