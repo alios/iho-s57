@@ -19,6 +19,7 @@ import qualified Data.Text as T
 import qualified Data.Map as Map
 import Data.Binary.Get
 import Data.Monoid
+import Data.Char (chr)
 
 data RecordNameT =
   CD | DS | DP | FE | IsolatedNode | ConnectedNode | Edge | Face
@@ -243,8 +244,7 @@ updateATTFs' m (i, t) =
   if (t == s57deleteChar) then Map.delete i m else Map.insert i t m
     
 s57deleteChar :: Text
-s57deleteChar = error "s57deleteChar is undefined yet"
-
+s57deleteChar =  T.singleton $ chr 0x7f
 
 updatePointerFields ::
   Show a =>
