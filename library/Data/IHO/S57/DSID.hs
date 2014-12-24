@@ -7,10 +7,8 @@ module Data.IHO.S57.DSID where
 import Control.Lens
 import Data.Text (Text)
 import Data.Data (Data)
-import Data.Typeable (Typeable, cast)
+import Data.Typeable (Typeable)
 import Data.Tree
-import qualified Data.Map as Map
-import qualified Data.Text as T
 import Data.IHO.S57.Types
 
 

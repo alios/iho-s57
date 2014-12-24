@@ -18,17 +18,17 @@ import Data.Map (Map)
 import qualified Data.Text as T
 import qualified Data.Map as Map
 import Data.Binary.Get
-
+import Data.Monoid
 
 data RecordNameT =
   CD | DS | DP | FE | IsolatedNode | ConnectedNode | Edge | Face
-  deriving (Show, Eq, Data, Typeable)
+  deriving (Show, Eq, Ord, Data, Typeable)
 
 
 data RecordName = RecordName {
   _rcnm :: RecordNameT,
   _rcid :: Int
-  } deriving (Show, Eq, Data, Typeable)
+  } deriving (Show, Eq, Ord, Data, Typeable)
 makeClassy ''RecordName
 
 data Record r = Record {
@@ -229,6 +229,48 @@ readRecordName r =
   RecordName { _rcnm = lookupField r "RCNM"
              , _rcid = lookupField r "RCID" }
 
+updateATTFs :: Map Int Text -> [(Int, Text)] -> Map Int Text
+updateATTFs = foldl updateATTFs'
+
+updateATTFs' :: Map Int Text -> (Int, Text) -> Map Int Text
+updateATTFs' m (i, t) =
+  if (t == s57deleteChar) then Map.delete i m else Map.insert i t m
+    
+s57deleteChar :: Text
+s57deleteChar = error "s57deleteChar is undefined yet"
+
+
+updatePointerFields ::
+  Show a =>
+  Getting [b] a [b]
+  -> Getting Int s Int
+  -> Getting Int s Int
+  -> Getting UpdateInstruction s UpdateInstruction
+  -> s
+  -> a
+  -> a
+  -> [b]
+updatePointerFields g pidx pn pui vrpc v r = 
+  let upP = vrpc ^. pidx 
+      upN = vrpc ^. pn
+      rpcUI = vrpc ^. pui
+      rpts' = v ^. g
+      rptsN = 
+        let rs = r ^. g
+        in if ((rpcUI /= Delete) && (length rs /= upN))
+           then error $ mconcat ["updatePointerFields: ",show rpcUI
+                                ," but wrong number of subfields: "
+                                , show r
+                                ]                                        
+           else rs
+      in case (rpcUI) of
+        Insert -> mconcat [take upP rpts', rptsN, drop upP rpts']
+        Delete -> mconcat [take upP rpts', drop (upP + upN ) rpts']
+        Modify -> mconcat [take upP rpts'
+                          ,rptsN
+                          ,drop (upP + upN ) rpts'] 
+
+
 
 instance FromS57Value RecordName where
   fromS57Value (S57Bits bs) =
@@ -304,3 +346,5 @@ instance FromS57Value Orientation where
   fromS57Value (S57CharData "R") = Reverse
   fromS57Value (S57Int i) = toEnum i
   fromS57Value v = error $ "fromS57Value Orientation undefined for " ++ show v
+
+

@@ -1,6 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE GADTs #-}
 
 module Data.IHO.S57.VRID where
 
@@ -14,11 +16,13 @@ import qualified Data.Text as T
 import Data.IHO.S57.Types
 import Data.Map (Map)
 import Data.Monoid
+import Data.Table
+import Control.Applicative
 
 data VRPC =
   VRPC { _vrpcUpdateInstruction :: ! UpdateInstruction
        , _vrpcObjectPointerIndex :: ! Int
-       , _vrpcFeatureObjectPointers :: ! Int
+       , _vrpcObjectPointers :: ! Int
        } deriving (Show, Eq, Data, Typeable)
 makeLenses ''VRPC
 
@@ -29,8 +33,9 @@ readVRPC r
     | otherwise =
         VRPC { _vrpcUpdateInstruction = lookupField r "VPUI"
              , _vrpcObjectPointerIndex = lookupField r "VPIX"
-             , _vrpcFeatureObjectPointers = lookupField r "NVPT"
+             , _vrpcObjectPointers = lookupField r "NVPT"
              }
+
 
 data TopologyIndicator
     = BeginningNode | EndNode | LeftFace | RightFace | ContainingFace | NullTopo
@@ -103,6 +108,70 @@ data VRID =
          , _vridSG3Ds :: ! [(Double, Double, Double)]
          }  deriving (Show, Eq, Data, Typeable)
 makeLenses ''VRID
+
+instance Tabular VRID where
+  type PKT VRID = RecordName 
+  data Key k VRID b where
+    VRIDRecordName :: Key Primary VRID RecordName
+  data Tab VRID i = VRIDTab (i Primary RecordName)
+
+  fetch VRIDRecordName = view recordName
+
+  primary = VRIDRecordName
+  primarily VRIDRecordName rn = rn
+
+  mkTab f
+    = VRIDTab <$> f VRIDRecordName
+  forTab (VRIDTab rn) f
+    = VRIDTab <$> f VRIDRecordName rn
+  ixTab  (VRIDTab rn) VRIDRecordName = rn
+
+
+vridTableEmpty :: Table VRID
+vridTableEmpty = EmptyTable
+
+vridUpsert :: Table VRID -> VRID -> Table VRID
+vridUpsert tbl v =
+  let rv = v ^. vridVersion
+  in case (v ^. vridUpdateInstruction) of
+   Insert ->
+     if (rv /= 1)
+     then error $ "vridUpsert: INSERT record with version != 1: " ++ show v
+     else insert v tbl
+   Delete -> delete v tbl
+   Modify ->
+     case (v ^. vridVRPC) of
+      Nothing -> error $ "vridUpdate: MODIFY record with no VRPC set: " ++ show v
+      Just vrpc ->
+        let rn = v ^. recordName            
+            r = maybe
+                (error $ "vridUpdate: MODIFY for non existing record: " ++
+                 show rn) id $ lookupVrid tbl rn
+            attfs = updateATTFs (r ^. vridATTFs) $ Map.toList $ v ^. vridATTFs
+            vrpts = updateVRPTs vrpc v r
+            r' = r { _vridVersion = rv
+                   , _vridATTFs = attfs
+                   , _vridVRPTs = vrpts
+                   }
+        in if (rv <= (r ^.vridVersion))          
+           then error $ "vridUpdate: MODIFY must have a version >= " ++ show rv 
+           else insert r' tbl
+
+
+
+
+updateVRPTs :: VRPC -> VRID -> VRID -> [VRPT]
+updateVRPTs = updatePointerFields vridVRPTs
+              vrpcObjectPointerIndex
+              vrpcObjectPointers
+              vrpcUpdateInstruction
+
+
+lookupVrid :: Table VRID -> RecordName -> Maybe VRID
+lookupVrid tbl rn =
+  case ((tbl ^. with VRIDRecordName (==) rn) ^. from table) of
+   [] -> Nothing
+   (x:_) -> Just x
 
 instance FromS57FileRecord VRID where
   fromS57FileDataRecord r

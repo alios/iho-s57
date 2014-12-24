@@ -14,6 +14,7 @@ import Data.Conduit.Attoparsec
 import qualified Data.Conduit.Binary as CB
 import Control.Monad.Trans.Resource
 
+
 import Data.IHO.S57.Types
 import Data.IHO.S57.Parser
 import Data.IHO.S57.DSID
@@ -116,3 +117,5 @@ handleRecord dr =
       Edge -> get >>= return . readVRID 
       Face -> get >>= return . readVRID 
       FE -> return . RecordFRID . fromS57FileDataRecord $ dr
+
+   
