@@ -5,7 +5,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 
 module Data.IHO.S57.Reader
-       ( S57DataSet (..), dataSetVRIDTable
+       ( S57DataSet (..), dataSetVRIDTable, dataSetFRIDTable
        , S57Record (..)      
        , s57Conduit
        , s57FileSource
@@ -52,13 +52,19 @@ drSink _ddr ll = sinkParser $ parseDR _ddr ll
 
 
 data S57DataSet =
-  S57DataSet { _dataSetVRIDTable :: Table VRID
-          } deriving (Show, Eq, Typeable)
+  S57DataSet { _dataSetFRIDTable :: Table FRID
+             , _dataSetVRIDTable :: Table VRID
+             } deriving (Show, Eq, Typeable)
 makeLenses ''S57DataSet
+
+
+
 
 s57readDataSet :: (Monad m) => Consumer S57Record m S57DataSet
 s57readDataSet = readDataSet' $
-              S57DataSet { _dataSetVRIDTable = EmptyTable }
+              S57DataSet { _dataSetFRIDTable = EmptyTable
+                         , _dataSetVRIDTable = EmptyTable
+                         }
 
 readDataSet' :: (Monad m) => S57DataSet -> Consumer S57Record m S57DataSet
 readDataSet' ds = do
@@ -67,6 +73,8 @@ readDataSet' ds = do
         Nothing -> Nothing
         Just (RecordVRID r) -> Just
           ds { _dataSetVRIDTable = vridUpsert (ds ^. dataSetVRIDTable) r }
+        Just (RecordFRID r) -> Just
+          ds { _dataSetFRIDTable = fridUpsert (ds ^. dataSetFRIDTable) r }
         _ -> Just ds   
   case ds' of
     Nothing -> return ds

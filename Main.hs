@@ -41,5 +41,7 @@ main :: IO ()
 main = do
   ds <- runResourceT $ s57src $$ s57readDataSet
   let vs = (ds ^. dataSetVRIDTable ^. from table)
+  let fs = (ds ^. dataSetFRIDTable ^. from table)
   _ <- sequence $ fmap (putStrLn . groom) vs
+  _ <- sequence $ fmap (putStrLn . groom) fs  
   return ()

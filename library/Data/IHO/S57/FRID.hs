@@ -1,6 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE GADTs #-}
+
 
 module Data.IHO.S57.FRID where
 
@@ -14,6 +17,8 @@ import qualified Data.Text as T
 import Data.IHO.S57.Types
 import Data.Map (Map)
 import Data.Monoid
+import Data.Table
+import Control.Applicative
 
 data FOID =
   FOID { _foidProducingAgency :: ! Int
@@ -37,7 +42,7 @@ readFOID r
 data FFPC =
   FFPC { _ffpcUpdateInstruction :: ! UpdateInstruction
        , _ffpcObjectPointerIndex :: ! Int
-       , _ffpcFeatureObjectPointers :: ! Int
+       , _ffpcObjectPointers :: ! Int
        } deriving (Show, Eq, Data, Typeable)
 makeLenses ''FFPC
 
@@ -48,7 +53,7 @@ readFFPC r
     | otherwise =
         FFPC { _ffpcUpdateInstruction = lookupField r "FFUI"
              , _ffpcObjectPointerIndex = lookupField r "FFIX"
-             , _ffpcFeatureObjectPointers = lookupField r "NFPT"
+             , _ffpcObjectPointers = lookupField r "NFPT"
              }
 
 data RelationShipIndicator =
@@ -80,7 +85,7 @@ mkFFPTs r
       in fmap mkFFPT rv
 
 data FSPC =
-  FSPC { _fspcSpatialPointerUpdateInstruction :: ! UpdateInstruction
+  FSPC { _fspcUpdateInstruction :: ! UpdateInstruction
        , _fspcSpatialPointerIndex :: ! Int
        , _fspcSpatialPointers :: ! Int
        } deriving (Show, Eq, Data, Typeable)
@@ -92,7 +97,7 @@ readFSPC r
     | ((structureFieldName . rootLabel $ r) /= "FSPC") =
         error $ "not an FSPC record: " ++ show r
     | otherwise =
-        FSPC { _fspcSpatialPointerUpdateInstruction = lookupField r "FSUI"
+        FSPC { _fspcUpdateInstruction = lookupField r "FSUI"
              , _fspcSpatialPointerIndex = lookupField r "FSIX"
              , _fspcSpatialPointers = lookupField r "NSPT"
              }
@@ -140,6 +145,84 @@ data FRID =
        , _fridFSPTs :: ! [FSPT]
        }  deriving (Show, Eq, Data, Typeable)
 makeLenses ''FRID
+
+
+instance Tabular FRID where
+  type PKT FRID = RecordName 
+  data Key k FRID b where
+    FRIDRecordName :: Key Primary FRID RecordName
+  data Tab FRID i = FRIDTab (i Primary RecordName)
+
+  fetch FRIDRecordName = view recordName
+
+  primary = FRIDRecordName
+  primarily FRIDRecordName rn = rn
+
+  mkTab f
+    = FRIDTab <$> f FRIDRecordName
+  forTab (FRIDTab rn) f
+    = FRIDTab <$> f FRIDRecordName rn
+  ixTab  (FRIDTab rn) FRIDRecordName = rn
+
+
+fridUpsert :: Table FRID -> FRID -> Table FRID
+fridUpsert tbl v =
+  let rv = v ^. fridVersion
+      vui = v ^. fridUpdateInstruction
+  in case (vui) of
+   Insert ->
+     if (rv /= 1)
+     then error $ "fridUpsert: INSERT record with version != 1: " ++ show v
+     else insert v tbl
+   Delete -> delete v tbl
+   Modify ->
+     let rn = v ^. recordName            
+         r = maybe
+             (error $ "fridUpdate: MODIFY for non existing record: " ++
+              show rn) id $ lookupFrid tbl rn
+         attfs = updateATTFs (r ^. fridATTFs) $ Map.toList $ v ^. fridATTFs
+         natfs = updateATTFs (r ^. fridNATFs) $ Map.toList $ v ^. fridNATFs
+         ffpts = maybe (v ^. fridFFPTs) (updateFFPTs v r) $
+                 pointerUpdateApplyable fridFFPC fridFFPTs r     
+         fspts = maybe (v ^. fridFSPTs) (updateFSPTs v r) $
+                 pointerUpdateApplyable fridFSPC fridFSPTs r     
+
+         r' = r { _fridVersion = rv
+                , _fridUpdateInstruction = vui
+                , _fridATTFs = attfs
+                , _fridNATFs = natfs
+                , _fridFFPTs = ffpts
+                , _fridFSPTs = fspts
+                }
+     in if (rv <= (r ^.fridVersion))          
+        then error $ "fridUpdate: MODIFY must have a version >= " ++ show rv 
+        else insert r' tbl
+
+
+
+updateFFPTs :: FRID -> FRID -> FFPC -> [FFPT]
+updateFFPTs = updatePointerFields 
+              ffpcUpdateInstruction
+              ffpcObjectPointerIndex
+              ffpcObjectPointers
+              fridFFPTs
+
+updateFSPTs :: FRID -> FRID -> FSPC -> [FSPT]
+updateFSPTs = updatePointerFields 
+              fspcUpdateInstruction
+              fspcSpatialPointerIndex
+              fspcSpatialPointers
+              fridFSPTs
+
+
+lookupFrid :: Table FRID -> RecordName -> Maybe FRID
+lookupFrid tbl rn =
+  case ((tbl ^. with FRIDRecordName (==) rn) ^. from table) of
+   [] -> Nothing
+   (x:_) -> Just x
+
+
+
 
 instance HasFOID FRID where
   fOID = fridFOID
