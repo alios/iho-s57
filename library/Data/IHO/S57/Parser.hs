@@ -2,7 +2,11 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 module Data.IHO.S57.Parser
-        where
+       ( DDR(..)
+       , parseDDR
+       , parseDR, readDRs
+       , LexLevelConfig(..), defaultLexLevelConfig
+       ) where
 
 import Prelude hiding (take)
 import Data.Monoid
@@ -53,50 +57,24 @@ defaultLexLevelConfig = LexLevelConfig {
   lexLevelCoordinateMulFactor = 1,
   lexLevelSoundingMulFactor = 1
   }
-                 
-{-
-parseS57File :: Parser S57File
-parseS57File = do
-  rs <- parseS57File'
-  return $ fmap dropISO rs
 
-parseS57File' :: Parser S57File
-parseS57File' = do
-  ddr <- parseDDR <?> "ddr record"
-  dr0' <- parseDR ddr defaultLexLevelConfig <?> "data record 0"
-  
-  let _dsid = dropISO $ readDRs ddr dr0'
-      _dssi = lookupChildField "DSID" _dsid "DSSI"
-  let lexLevelConfig =
-        case (structureFieldName $ rootLabel _dsid) of
-         "DSID" ->
-           let r = structureLinearField $ rootLabel _dssi
-               lookupF k = fromS57Value $
-                           maybe (error $ "DSSI: unable to lookup key " ++ T.unpack k)
-                           id $ Map.lookup k r
-           in defaultLexLevelConfig { lexLevelATTF = lookupF "AALL"
-                                    , lexLevelNATF = lookupF "NALL"
-                                    }
-         _ -> defaultLexLevelConfig
-  drs <- (parseDR ddr lexLevelConfig) `manyTill` endOfInput
-  return $ fmap (readDRs ddr) (dr0':drs)
-
-
--}
-
-
+ddrLookup' :: Text -> DDR -> Maybe FieldInfo
 ddrLookup' fn ddr = do
   Map.lookup fn $ ddr ^. ddrFieldInfo
 
-ddrLookup fn ddr  = maybe (error $ "unable to lookup field info in DDR for: " ++ show fn) id $
-                    ddrLookup' fn ddr
+
+ddrLookup :: Text -> DDR -> FieldInfo
+ddrLookup fn ddr  =
+  maybe (error $ "unable to lookup field info in DDR for: " ++ show fn) id $
+  ddrLookup' fn ddr
    
 
-
+ddrLookupChildren :: Text -> DDR -> [Text]
 ddrLookupChildren fn ddr =
     let fcf = ddr ^. ddrFileControlField
     in fmap snd $ filter (\(p, _) -> fn == p) fcf
-       
+
+ddrLookupParent :: Text -> DDR -> Maybe Text
 ddrLookupParent fn ddr =
   let fcf = ddr ^. ddrFileControlField
   in case (filter (\(_, c) -> fn == c) fcf) of
@@ -105,11 +83,11 @@ ddrLookupParent fn ddr =
       _ -> error "ddrLookupParent: found more then one parent"
 
 
-
+filterFieldsByName :: [S57Structure] -> Text -> [S57Structure]
 filterFieldsByName rs fn = filter (\r -> (structureFieldName r) == fn) rs
 
 
-
+readDRs :: DDR -> [S57Structure] -> Tree S57Structure
 readDRs _ [] = error "readDRs: empty structure"
 readDRs _ (_:[]) = error "readDRs: structure has only one record"
 readDRs ddr (dr0:dr1:drs)
@@ -124,23 +102,21 @@ readDRs ddr (dr0:dr1:drs)
         ]
       }
   
+buildSubForrest :: DDR -> S57Structure -> [S57Structure] -> [Tree S57Structure]
 buildSubForrest ddr dr1 drs =
   let cns = ddrLookupChildren (structureFieldName dr1) ddr
       cns' = mconcat $ fmap (filterFieldsByName drs) cns
       emptyTree l = Node l []
   in fmap emptyTree cns'
 
-
+parseFT, parseUT :: Parser Char
 parseFT = char '\RS'
 parseUT = char '\US'
+tagL :: Int
 tagL = 4
 
 
-
-
-
-
-
+parseDDR :: Parser DDR 
 parseDDR = do
   (baseAddr, lengthL, posL) <- parseDDRLeader
   dir <- (parseDirectoryEntry tagL lengthL posL) `manyTill` parseFT
@@ -153,15 +129,6 @@ parseDDR = do
     _ddrFieldInfo = Map.fromList $ fs
     }
 
-{-
-parseDRs ddr ll = do
-  done <- atEnd
-  if (done) then return []
-    else do dr <- parseDR ddr ll
-            drs <- parseDRs ddr ll
-            return (dr:drs)
--}
-
 parseDR :: DDR -> LexLevelConfig -> Parser (Maybe [S57Structure])
 parseDR ddr ll = do
   done <- atEnd
@@ -172,8 +139,7 @@ parseDR ddr ll = do
     fs <- parseDirectory dir
     return . Just $ (fmap (parseDRField ll ddr) fs)
 
-
-
+lookupLexLevel :: LexLevelConfig -> Text -> Int
 lookupLexLevel ll fn =
   if (fn == "*ATTF") then lexLevelATTF ll
   else if (fn == "*NATF") then lexLevelNATF ll
@@ -389,6 +355,7 @@ unsignedDataParser w Nothing _ =
         1 -> fmap (fromInteger . toInteger) parseWord8
         2 -> fmap (fromInteger . toInteger) parseWord16
         4 -> fmap (fromInteger . toInteger) parseWord32
+        n -> error $ "unsignedDataParser: undefined width " ++ show n
   in  fmap S57Int p
 
 
@@ -414,6 +381,7 @@ parseWord32 = fmap (runGet getWord32le . BL.fromStrict) $ take 4
 lexLevelParser 0 = fmap T.singleton $ satisfy isAscii
 lexLevelParser 1 = fmap T.singleton $ satisfy isISO8859_1
 lexLevelParser 2 = fmap T.decodeUtf16LE $ take 2
+lexLevelParser ll = error $ "lexLevelParser: undefined LexLevel " ++ show ll
 
 isAscii :: Char -> Bool
 isAscii c = (ord c) < 128
@@ -440,8 +408,4 @@ parseDataTypeCode = do
    '5' -> return Binary
    '6' -> return MixedDataTypes
    c' -> fail $ "parseDataTypeCode: undefined code: " ++ show c'
-
-
-s57 :: ()
-s57 = ()
 
