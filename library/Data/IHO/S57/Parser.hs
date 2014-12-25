@@ -2,7 +2,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 module Data.IHO.S57.Parser
-       ( DDR(..)
+       ( DDR(..), ddrDesc, ddrFileControlField, ddrFieldInfo
        , parseDDR
        , parseDR, readDRs
        , LexLevelConfig(..), defaultLexLevelConfig
@@ -14,7 +14,6 @@ import Control.Lens
 import Data.Attoparsec.ByteString.Char8
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
-import qualified Data.ByteString.Lazy.Char8 as C
 import qualified Data.ByteString.Lazy as BL
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -74,15 +73,6 @@ ddrLookupChildren fn ddr =
     let fcf = ddr ^. ddrFileControlField
     in fmap snd $ filter (\(p, _) -> fn == p) fcf
 
-ddrLookupParent :: Text -> DDR -> Maybe Text
-ddrLookupParent fn ddr =
-  let fcf = ddr ^. ddrFileControlField
-  in case (filter (\(_, c) -> fn == c) fcf) of
-      [] -> Nothing
-      ((p, _):[]) -> Just p
-      _ -> error "ddrLookupParent: found more then one parent"
-
-
 filterFieldsByName :: [S57Structure] -> Text -> [S57Structure]
 filterFieldsByName rs fn = filter (\r -> (structureFieldName r) == fn) rs
 
@@ -118,7 +108,7 @@ tagL = 4
 
 parseDDR :: Parser DDR 
 parseDDR = do
-  (baseAddr, lengthL, posL) <- parseDDRLeader
+  (_, lengthL, posL) <- parseDDRLeader
   dir <- (parseDirectoryEntry tagL lengthL posL) `manyTill` parseFT
   (fcfRaw:fsRaw) <- parseDirectory dir
   let fcf = doParseFileControlField  $ snd fcfRaw
@@ -134,7 +124,7 @@ parseDR ddr ll = do
   done <- atEnd
   if (done) then return Nothing
     else do 
-    (baseAddr, lengthL, posL) <- parseDRLeader
+    (_, lengthL, posL) <- parseDRLeader
     dir <- (parseDirectoryEntry tagL lengthL posL) `manyTill` parseFT
     fs <- parseDirectory dir
     return . Just $ (fmap (parseDRField ll ddr) fs)
@@ -145,9 +135,9 @@ lookupLexLevel ll fn =
   else if (fn == "*NATF") then lexLevelNATF ll
        else lexLevelDefault ll               
 
-  
+parseDRField :: LexLevelConfig -> DDR -> (Text, ByteString) -> S57Structure  
 parseDRField ll ddr (fn, bs) =
-  let (_,structCode,typeCode,ad,ps) = ddrLookup fn ddr
+  let (_,structCode,_,ad,ps) = ddrLookup fn ddr
       ll' = lookupLexLevel ll fn
   in case (structCode) of
       Empty ->  S57SingleValue fn $ either error id $ parseOnly ((head ps) ll') bs
@@ -159,7 +149,8 @@ parseMultiDim :: LexLevelConfig -> [Text] -> [Int -> Parser S57Value] -> Parser 
 parseMultiDim ll fns pss = (parseLinear ll fns pss) `manyTill` parseFT
 
 parseLinear :: LexLevelConfig -> [Text] -> [Int -> Parser S57Value] -> Parser (Map Text S57Value)
-parseLinear _ [] [] = return mempty
+parseLinear _ [] _ = return mempty
+parseLinear _ _ [] = return mempty
 parseLinear ll (fn:fns) (p:ps) =
   let ll' = lookupLexLevel ll fn
   in do
@@ -169,13 +160,13 @@ parseLinear ll (fn:fns) (p:ps) =
 
 
 
-
+doParseFileControlField :: ByteString -> (String, [(Text, Text)])
 doParseFileControlField bs =
   case (parseOnly (parseFileControlField) bs) of
    Left err -> error $ "doParseFileControlField: " ++ show err ++ " on " ++ show bs
    Right r -> r
 
-
+parseFileControlField :: Parser (String, [(Text, Text)])
 parseFileControlField = do
   _ <- string "0000;&"
   lexL <- parseLexLevel
@@ -188,6 +179,10 @@ parseFileControlField = do
   return (title, fps)
 
 
+type DDField =
+  (Text, DataStructCode, DataTypeCode, [Text], [Int -> Parser S57Value])
+
+doParseDDField :: Show t => (t, ByteString) -> (t, DDField)
 doParseDDField (tag, bs) =
   case (parseOnly parseDDField bs) of
    Left err -> error $ "doParseDDField: (" ++ show tag ++ ") " ++ show err ++ " on " ++ show bs
@@ -212,7 +207,7 @@ parseFieldsR i (d:ds) = do
           return (o1 + l, (T.pack tag, f))
   
 
-  
+parseDDField :: Parser DDField  
 parseDDField = do
   structCode <- parseDataStructCode
   typeCode <- parseDataTypeCode
@@ -225,15 +220,16 @@ parseDDField = do
     then fail $ "parseDDField invalid field/parser data, fcs length: " ++ show (length fcs)
     else return (fieldName, structCode, typeCode, ad, fcs)
 
-
+parseLexLevel :: Parser Int
 parseLexLevel =
   choice [ string "   " >> return (0 :: Int)
          , string "-A " >> return 1
          , string "%/A" >> return 2
          ]
-  
+
+parseDDRLeader :: Parser (Int, Int, Int)
 parseDDRLeader = do
-  recLen <- parseInt 5
+  _ <- parseInt 5 -- recLen
   _ <- string "3LE1 09"
   baseAddr <- parseInt 5
   _ <- string " ! "
@@ -243,9 +239,9 @@ parseDDRLeader = do
   return (baseAddr, lengthL, posL)
 
 
-
+parseDRLeader :: Parser (Int, Int, Int)
 parseDRLeader = do
-  recLen <- parseInt 5
+  _ <- parseInt 5 -- recLen
   _ <- string " D     "
   baseAddr <- parseInt 5
   _ <- string "   "
@@ -254,8 +250,9 @@ parseDRLeader = do
   _ <- string "04"  
   return (baseAddr, lengthL, posL)
 
-parseDirectoryEntry tagL lengthL posL = do
-  tag <- count tagL anyChar
+parseDirectoryEntry :: Int -> Int -> Int -> Parser (String, Int, Int)
+parseDirectoryEntry _tagL lengthL posL = do
+  tag <- count _tagL anyChar
   len <- parseInt lengthL
   pos <- parseInt posL
   return (tag, pos, len)
@@ -263,14 +260,15 @@ parseDirectoryEntry tagL lengthL posL = do
 
 type TypeInfo = Maybe Int
 
-
+parseFieldNames :: Parser [Text]
 parseFieldNames = do
   fn <- fmap T.pack $ many' (satisfy $ notInClass "!\US")
   s <- satisfy $ inClass "!\US"
   fns <- if (s == '!') then parseFieldNames else return []
   return $ if (T.null fn) then fns else (fn:fns)
 
-parseFieldControl ll = do
+parseFieldControl :: Int -> Parser [Int -> Parser S57Value]
+parseFieldControl _ = do
   _ <- char '('
   is <- parseS57Values
   _ <- parseFT
@@ -286,11 +284,9 @@ parseS57Values = do
 
 
 
-xx = fmap (fmap $ charDataParser) $ parseType' "A"
 
 parseS57Value :: Parser [Int -> Parser S57Value]
 parseS57Value =
-  
   choice [ fmap (fmap $ charDataParser) $ parseType' "A"
          , fmap (fmap $ intDataParser) $ parseType' "I"
          , fmap (fmap $ realDataParser) $ parseType' "R"
@@ -316,40 +312,53 @@ parseType' tc = do
                 ]
   return . replicate c $ (arg)
 
+parseRLString :: FromS57Value b => Int -> Int -> Parser b
 parseRLString ll rl = fmap fromS57Value $ charDataParser (Just rl) ll
+parseUTString :: FromS57Value b => Int -> Parser b
 parseUTString ll = fmap fromS57Value $ charDataParser Nothing ll
 
-
+dataParser :: ([Text] -> b) -> Maybe Int -> Int -> Parser b
 dataParser c arg ll =
   fmap c $ case arg of
    Nothing -> (lexLevelParser ll) `manyTill` parseUT
    Just n  -> count n (lexLevelParser ll)
-   
+
+
+charDataParser :: TypeInfo -> Int -> Parser S57Value
 charDataParser = dataParser (S57CharData .  mconcat)
+intDataParser :: TypeInfo -> Int -> Parser S57Value
 intDataParser = dataParser (S57Int . readParserDefault 0)
 
+readParserDefault :: (Read t) => t -> [Text] -> t
 readParserDefault t [] = t
 readParserDefault _ cs = read . T.unpack . mconcat $ cs
 
-
+realDataParser :: TypeInfo -> Int -> Parser S57Value
 realDataParser = dataParser (S57Real . readParserDefault 0.0)
 
+bitsDataParser :: TypeInfo -> Int -> Parser S57Value
 bitsDataParser (Just n) _ =
   let bytesToRead = dN + if (mN /= 0) then 1 else 0
       dN = n `div` 8
       mN = n `mod` 8
   in fmap (S57Bits) $ take bytesToRead
-btisDataParser arg _ = fail $ "bitsDataParser: undefined arg " ++ show arg 
+bitsDataParser arg _ = fail $ "bitsDataParser: undefined arg " ++ show arg 
 
-singedDataParser w arg _ = error "signedDataParser: w: " ++ show w ++ " arg: " ++ show arg
+
+signedDataParser :: Int -> TypeInfo -> Int -> Parser S57Value
+signedDataParser w (Just arg) _  =
+  error $ "signedDataParser: w: " ++ show w ++ " arg: " ++ show arg
 signedDataParser w Nothing _ =
   let p = case (w) of
         1 -> fmap (fromInteger . toInteger) parseInt8
         2 -> fmap (fromInteger . toInteger) parseInt16
         4 -> fmap (fromInteger . toInteger) parseInt32
+        n -> error $ "signedDataParser: undefined width " ++ show n
   in  fmap S57Int p
 
-unsingedDataParser w arg _ = error "signedDataParser: w: " ++ show w ++ " arg: " ++ show arg
+unsignedDataParser :: Int -> TypeInfo -> Int -> Parser S57Value
+unsignedDataParser w (Just arg) _ =
+  error $ "signedDataParser: w: " ++ show w ++ " arg: " ++ show arg
 unsignedDataParser w Nothing _ =
   let p = case (w) of
         1 -> fmap (fromInteger . toInteger) parseWord8
@@ -361,8 +370,6 @@ unsignedDataParser w Nothing _ =
 
 parseInt :: Int -> Parser Int
 parseInt i = (fmap read $ count i anyChar) <?> "parseInt"
-
-parseString = string . BL.toStrict . C.pack
 
 parseInt8 :: Parser Int8
 parseInt8 = fmap fromIntegral parseWord8
@@ -378,6 +385,7 @@ parseWord16 = fmap (runGet getWord16le . BL.fromStrict) $ take 2
 parseWord32 :: Parser Word32
 parseWord32 = fmap (runGet getWord32le . BL.fromStrict) $ take 4
 
+lexLevelParser :: Int -> Parser Text
 lexLevelParser 0 = fmap T.singleton $ satisfy isAscii
 lexLevelParser 1 = fmap T.singleton $ satisfy isISO8859_1
 lexLevelParser 2 = fmap T.decodeUtf16LE $ take 2
@@ -389,7 +397,7 @@ isAscii c = (ord c) < 128
 isISO8859_1 :: Char -> Bool
 isISO8859_1 c = (ord c) < 256
 
-
+parseDataStructCode :: Parser DataStructCode
 parseDataStructCode = do
   c <- satisfy $ inClass "012"
   case c of
@@ -398,8 +406,7 @@ parseDataStructCode = do
    '2' -> return MultiDim
    c' -> fail $ "parseDataStructCode: undefined code: " ++ show c'
 
-
-
+parseDataTypeCode :: Parser DataTypeCode
 parseDataTypeCode = do
   c <- satisfy $ inClass "0156"
   case c of
