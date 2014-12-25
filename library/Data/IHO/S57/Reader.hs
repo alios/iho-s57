@@ -5,7 +5,8 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 
 module Data.IHO.S57.Reader
-       ( S57DataSet (..), dataSetVRIDTable, dataSetFRIDTable
+       ( S57Catalog (..), s57readCatalog
+       , S57DataSet (..), dataSetVRIDTable, dataSetFRIDTable
        , S57Record (..)      
        , s57Conduit
        , s57FileSource
@@ -24,12 +25,14 @@ import Data.Typeable (Typeable)
 
 import Data.IHO.S57.Types
 import Data.IHO.S57.Parser
+import Data.IHO.S57.CATD
 import Data.IHO.S57.DSID
 import Data.IHO.S57.DSPM
 import Data.IHO.S57.FRID
 import Data.IHO.S57.VRID    
 
 data S57Record =
+  RecordCATD CATD |
   RecordDSID DSID |
   RecordDSPM DSPM |
   RecordVRID VRID |
@@ -50,15 +53,27 @@ drSink :: (MonadThrow m) =>
            DDR -> LexLevelConfig -> Consumer ByteString m (Maybe [S57Structure])
 drSink _ddr ll = sinkParser $ parseDR _ddr ll
 
-
 data S57DataSet =
   S57DataSet { _dataSetFRIDTable :: Table FRID
              , _dataSetVRIDTable :: Table VRID
              } deriving (Show, Eq, Typeable)
 makeLenses ''S57DataSet
 
+data S57Catalog =
+  S57Catalog [CATD] deriving (Show, Eq, Typeable)
 
 
+
+s57readCatalog :: (Monad m) => Consumer S57Record m S57Catalog
+s57readCatalog = s57readCatalog' $ S57Catalog mempty
+
+s57readCatalog' :: (Monad m) => S57Catalog -> Consumer S57Record m S57Catalog
+s57readCatalog' cat@(S57Catalog catds) = do
+  v <- await
+  case v of
+   Nothing -> return cat
+   Just (RecordCATD r) -> s57readCatalog' $ S57Catalog (r:catds)
+   Just r -> fail $ "s57readCatalog: unexpected record: " ++ show r
 
 s57readDataSet :: (Monad m) => Consumer S57Record m S57DataSet
 s57readDataSet = readDataSet' $
@@ -120,7 +135,7 @@ handleRecord dr =
             sg3ds = fmap (\(x,y,z) -> (x / cf, y / cf, z / sf)) (v ^. vridSG3Ds)
         in v { _vridSG2Ds = sg2ds, _vridSG3Ds = sg3ds }
   in case (rn ^. rcnm) of
-      CD -> fail "unexpected CATD record"
+      CD -> return . RecordCATD . fromS57FileDataRecord $ dr
       DP -> do
         st <- get
         let dsid' = (fromS57FileDataRecord $ dr) :: DSID

@@ -50,7 +50,7 @@ data LexLevelConfig =
 
 defaultLexLevelConfig :: LexLevelConfig 
 defaultLexLevelConfig = LexLevelConfig {
-  lexLevelDefault = 0,
+  lexLevelDefault = 1,
   lexLevelATTF = error "ATTF lex level not set",
   lexLevelNATF = error "NATF lex level not set",
   lexLevelCoordinateMulFactor = 1,
@@ -232,7 +232,8 @@ parseDDRLeader = do
   _ <- parseInt 5 -- recLen
   _ <- string "3LE1 09"
   baseAddr <- parseInt 5
-  _ <- string " ! "
+  _ <- choice [string " ! "
+              ,string "   "]
   lengthL <- parseInt 1
   posL <- parseInt 1
   _ <- string "04"  
