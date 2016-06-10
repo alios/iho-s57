@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskell   #-}
 
 module Data.IHO.S57.Parser
        ( DDR(..), ddrDesc, ddrFileControlField, ddrFieldInfo
@@ -8,24 +8,26 @@ module Data.IHO.S57.Parser
        , LexLevelConfig(..), defaultLexLevelConfig
        ) where
 
-import Prelude hiding (take)
-import Data.Monoid
-import Control.Lens
-import Data.Attoparsec.ByteString.Char8
-import Data.ByteString (ByteString)
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.Lazy as BL
-import Data.Text (Text)
-import qualified Data.Text as T
-import qualified Data.Text.Encoding as T
-import Data.Word
-import Data.Int
-import Data.Binary.Get (runGet, getWord16le, getWord32le)
-import qualified Data.Map as Map
-import Data.Map (Map)
-import Data.Char (ord)
-import Data.Tree
-import Data.IHO.S57.Types
+import           Control.Lens.Getter
+import           Control.Lens.TH
+import           Data.Attoparsec.ByteString.Char8
+import           Data.Binary.Get                  (getWord16le, getWord32le,
+                                                   runGet)
+import           Data.ByteString                  (ByteString)
+import qualified Data.ByteString                  as BS
+import qualified Data.ByteString.Lazy             as BL
+import           Data.Char                        (ord)
+import           Data.IHO.S57.Types
+import           Data.Int
+import           Data.Map                         (Map)
+import qualified Data.Map                         as Map
+import           Data.Monoid
+import           Data.Text                        (Text)
+import qualified Data.Text                        as T
+import qualified Data.Text.Encoding               as T
+import           Data.Tree
+import           Data.Word
+import           Prelude                          hiding (take)
 
 data DataStructCode = Empty | Linear | MultiDim deriving (Show, Eq)
 data DataTypeCode = CharData | ImplicitPoint | Binary | MixedDataTypes deriving (Show, Eq)
@@ -33,22 +35,22 @@ data DataTypeCode = CharData | ImplicitPoint | Binary | MixedDataTypes deriving 
 type FieldInfo = (Text, DataStructCode, DataTypeCode, [Text], [Int -> Parser S57Value])
 
 data DDR = DDR {
-  _ddrDesc :: Text,
+  _ddrDesc             :: Text,
   _ddrFileControlField :: [(Text, Text)],
-  _ddrFieldInfo :: Map Text FieldInfo
-  } 
+  _ddrFieldInfo        :: Map Text FieldInfo
+  }
 makeLenses ''DDR
 
 data LexLevelConfig =
   LexLevelConfig {
-    lexLevelDefault :: Int,
-    lexLevelATTF :: Int,
-    lexLevelNATF :: Int,
+    lexLevelDefault             :: Int,
+    lexLevelATTF                :: Int,
+    lexLevelNATF                :: Int,
     lexLevelCoordinateMulFactor :: Int,
-    lexLevelSoundingMulFactor :: Int
+    lexLevelSoundingMulFactor   :: Int
     }
 
-defaultLexLevelConfig :: LexLevelConfig 
+defaultLexLevelConfig :: LexLevelConfig
 defaultLexLevelConfig = LexLevelConfig {
   lexLevelDefault = 1,
   lexLevelATTF = error "ATTF lex level not set",
@@ -66,7 +68,7 @@ ddrLookup :: Text -> DDR -> FieldInfo
 ddrLookup fn ddr  =
   maybe (error $ "unable to lookup field info in DDR for: " ++ show fn) id $
   ddrLookup' fn ddr
-   
+
 
 ddrLookupChildren :: Text -> DDR -> [Text]
 ddrLookupChildren fn ddr =
@@ -91,7 +93,7 @@ readDRs ddr (dr0:dr1:drs)
            }
         ]
       }
-  
+
 buildSubForrest :: DDR -> S57Structure -> [S57Structure] -> [Tree S57Structure]
 buildSubForrest ddr dr1 drs =
   let cns = ddrLookupChildren (structureFieldName dr1) ddr
@@ -106,7 +108,7 @@ tagL :: Int
 tagL = 4
 
 
-parseDDR :: Parser DDR 
+parseDDR :: Parser DDR
 parseDDR = do
   (_, lengthL, posL) <- parseDDRLeader
   dir <- (parseDirectoryEntry tagL lengthL posL) `manyTill` parseFT
@@ -123,7 +125,7 @@ parseDR :: DDR -> LexLevelConfig -> Parser (Maybe [S57Structure])
 parseDR ddr ll = do
   done <- atEnd
   if (done) then return Nothing
-    else do 
+    else do
     (_, lengthL, posL) <- parseDRLeader
     dir <- (parseDirectoryEntry tagL lengthL posL) `manyTill` parseFT
     fs <- parseDirectory dir
@@ -133,9 +135,9 @@ lookupLexLevel :: LexLevelConfig -> Text -> Int
 lookupLexLevel ll fn =
   if (fn == "*ATTF") then lexLevelATTF ll
   else if (fn == "*NATF") then lexLevelNATF ll
-       else lexLevelDefault ll               
+       else lexLevelDefault ll
 
-parseDRField :: LexLevelConfig -> DDR -> (Text, ByteString) -> S57Structure  
+parseDRField :: LexLevelConfig -> DDR -> (Text, ByteString) -> S57Structure
 parseDRField ll ddr (fn, bs) =
   let (_,structCode,_,ad,ps) = ddrLookup fn ddr
       ll' = lookupLexLevel ll fn
@@ -205,9 +207,9 @@ parseFieldsR i (d:ds) = do
           _ <- if (o1 > o0) then (do _ <- take (o1 - o0) ; return ()) else return ()
           f <- take l
           return (o1 + l, (T.pack tag, f))
-  
 
-parseDDField :: Parser DDField  
+
+parseDDField :: Parser DDField
 parseDDField = do
   structCode <- parseDataStructCode
   typeCode <- parseDataTypeCode
@@ -236,7 +238,7 @@ parseDDRLeader = do
               ,string "   "]
   lengthL <- parseInt 1
   posL <- parseInt 1
-  _ <- string "04"  
+  _ <- string "04"
   return (baseAddr, lengthL, posL)
 
 
@@ -248,7 +250,7 @@ parseDRLeader = do
   _ <- string "   "
   lengthL <- parseInt 1
   posL <- parseInt 1
-  _ <- string "04"  
+  _ <- string "04"
   return (baseAddr, lengthL, posL)
 
 parseDirectoryEntry :: Int -> Int -> Int -> Parser (String, Int, Int)
@@ -297,7 +299,7 @@ parseS57Value =
          , fmap (fmap $ unsignedDataParser 4) $ parseType' "b14"
          , fmap (fmap $ signedDataParser 1) $ parseType' "b21"
          , fmap (fmap $ signedDataParser 2) $ parseType' "b22"
-         , fmap (fmap $ signedDataParser 4) $ parseType' "b24"                 
+         , fmap (fmap $ signedDataParser 4) $ parseType' "b24"
          ]
 
 
@@ -343,7 +345,7 @@ bitsDataParser (Just n) _ =
       dN = n `div` 8
       mN = n `mod` 8
   in fmap (S57Bits) $ take bytesToRead
-bitsDataParser arg _ = fail $ "bitsDataParser: undefined arg " ++ show arg 
+bitsDataParser arg _ = fail $ "bitsDataParser: undefined arg " ++ show arg
 
 
 signedDataParser :: Int -> TypeInfo -> Int -> Parser S57Value
@@ -416,4 +418,3 @@ parseDataTypeCode = do
    '5' -> return Binary
    '6' -> return MixedDataTypes
    c' -> fail $ "parseDataTypeCode: undefined code: " ++ show c'
-

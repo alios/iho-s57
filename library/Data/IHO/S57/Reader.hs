@@ -7,7 +7,7 @@
 module Data.IHO.S57.Reader
        ( S57Catalog (..), s57readCatalog
        , S57DataSet (..), dataSetVRIDTable, dataSetFRIDTable
-       , S57Record (..)      
+       , S57Record (..)
        , s57Conduit
        , s57FileSource
        , s57readDataSet) where
@@ -20,7 +20,6 @@ import Data.Conduit.Lift
 import Data.Conduit.Attoparsec
 import qualified Data.Conduit.Binary as CB
 import Control.Monad.Trans.Resource
-import Data.Table
 import Data.Typeable (Typeable)
 
 import Data.IHO.S57.Types
@@ -29,24 +28,24 @@ import Data.IHO.S57.CATD
 import Data.IHO.S57.DSID
 import Data.IHO.S57.DSPM
 import Data.IHO.S57.FRID
-import Data.IHO.S57.VRID    
+import Data.IHO.S57.VRID
 
 data S57Record =
   RecordCATD CATD |
   RecordDSID DSID |
   RecordDSPM DSPM |
   RecordVRID VRID |
-  RecordFRID FRID 
+  RecordFRID FRID
   deriving (Show, Eq)
 
 data ReaderState =
   ReaderState { _ddr :: Maybe DDR
               , _lexConfig :: LexLevelConfig
-              } 
+              }
 makeLenses ''ReaderState
 
 
-ddrSink :: (MonadThrow m) => Consumer ByteString m DDR                       
+ddrSink :: (MonadThrow m) => Consumer ByteString m DDR
 ddrSink = sinkParser parseDDR
 
 drSink :: (MonadThrow m) =>
@@ -54,8 +53,8 @@ drSink :: (MonadThrow m) =>
 drSink _ddr ll = sinkParser $ parseDR _ddr ll
 
 data S57DataSet =
-  S57DataSet { _dataSetFRIDTable :: Table FRID
-             , _dataSetVRIDTable :: Table VRID
+  S57DataSet { _dataSetFRIDTable :: RecordTable FRID
+             , _dataSetVRIDTable :: RecordTable VRID
              } deriving (Show, Eq, Typeable)
 makeLenses ''S57DataSet
 
@@ -76,10 +75,10 @@ s57readCatalog' cat@(S57Catalog catds) = do
    Just r -> fail $ "s57readCatalog: unexpected record: " ++ show r
 
 s57readDataSet :: (Monad m) => Consumer S57Record m S57DataSet
-s57readDataSet = readDataSet' $
-              S57DataSet { _dataSetFRIDTable = EmptyTable
-                         , _dataSetVRIDTable = EmptyTable
-                         }
+s57readDataSet = readDataSet'
+  S57DataSet { _dataSetFRIDTable = mempty
+             , _dataSetVRIDTable = mempty
+             }
 
 readDataSet' :: (Monad m) => S57DataSet -> Consumer S57Record m S57DataSet
 readDataSet' ds = do
@@ -90,11 +89,11 @@ readDataSet' ds = do
           ds { _dataSetVRIDTable = vridUpsert (ds ^. dataSetVRIDTable) r }
         Just (RecordFRID r) -> Just
           ds { _dataSetFRIDTable = fridUpsert (ds ^. dataSetFRIDTable) r }
-        _ -> Just ds   
+        _ -> Just ds
   case ds' of
     Nothing -> return ds
     Just ds_ -> readDataSet' ds_
-     
+
 s57ConduitS :: (MonadState ReaderState m, MonadThrow m) =>
                Conduit ByteString m S57Record
 s57ConduitS = do
@@ -157,13 +156,13 @@ handleRecord dr =
                                           }
         put st { _lexConfig = lexConfig' }
         return $ RecordDSPM dspm'
-      IsolatedNode -> get >>= return . readVRID 
-      ConnectedNode -> get >>= return . readVRID 
-      Edge -> get >>= return . readVRID 
-      Face -> get >>= return . readVRID 
+      IsolatedNode -> get >>= return . readVRID
+      ConnectedNode -> get >>= return . readVRID
+      Edge -> get >>= return . readVRID
+      Face -> get >>= return . readVRID
       FE -> return . RecordFRID . fromS57FileDataRecord $ dr
 
-   
+
 s57FileSource :: (MonadResource m, MonadThrow m) =>
                  FilePath -> Producer m S57Record
 s57FileSource fp = toProducer $ (CB.sourceFile fp  $= s57Conduit)

@@ -1,28 +1,26 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE GADTs              #-}
+{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE TemplateHaskell    #-}
+{-# LANGUAGE TypeFamilies       #-}
 
 
 module Data.IHO.S57.FRID where
 
-import Control.Lens
-import Data.Text (Text)
-import Data.Data (Data)
-import Data.Typeable (Typeable)
-import Data.Tree
-import qualified Data.Map as Map
-import qualified Data.Text as T
-import Data.IHO.S57.Types
-import Data.Map (Map)
-import Data.Monoid
-import Data.Table
-import Control.Applicative
+import           Control.Lens
+import           Data.Data          (Data)
+import           Data.IHO.S57.Types
+import           Data.Map           (Map)
+import qualified Data.Map           as Map
+import           Data.Maybe
+import           Data.Text          (Text)
+import qualified Data.Text          as T
+import           Data.Tree
+import           Data.Typeable      (Typeable)
 
 data FOID =
-  FOID { _foidProducingAgency :: ! Int
-       , _foidIdentificationNumber :: ! Int
+  FOID { _foidProducingAgency          :: ! Int
+       , _foidIdentificationNumber     :: ! Int
        , _foidFeatureIdentificationSub :: ! Int
        } deriving (Show, Eq, Data, Typeable)
 
@@ -31,7 +29,7 @@ makeClassy ''FOID
 
 readFOID :: Tree S57Structure -> FOID
 readFOID r
-    | ((structureFieldName . rootLabel $ r) /= "FOID") =
+    | (structureFieldName . rootLabel $ r) /= "FOID" =
         error $ "not an FOID record: " ++ show r
     | otherwise =
         FOID { _foidProducingAgency = lookupField r "AGEN"
@@ -40,15 +38,15 @@ readFOID r
              }
 
 data FFPC =
-  FFPC { _ffpcUpdateInstruction :: ! UpdateInstruction
+  FFPC { _ffpcUpdateInstruction  :: ! UpdateInstruction
        , _ffpcObjectPointerIndex :: ! Int
-       , _ffpcObjectPointers :: ! Int
+       , _ffpcObjectPointers     :: ! Int
        } deriving (Show, Eq, Data, Typeable)
 makeLenses ''FFPC
 
 readFFPC :: Tree S57Structure -> FFPC
 readFFPC r
-    | ((structureFieldName . rootLabel $ r) /= "FFPC") =
+    | (structureFieldName . rootLabel $ r) /= "FFPC" =
         error $ "not an FFPC record: " ++ show r
     | otherwise =
         FFPC { _ffpcUpdateInstruction = lookupField r "FFUI"
@@ -62,21 +60,21 @@ data RelationShipIndicator =
 
 
 data FFPT =
-  FFPT { _ffptLongName :: ! RecordName
+  FFPT { _ffptLongName              :: ! RecordName
        , _ffptRelationShipIndicator :: ! RelationShipIndicator
-       , _ffptComment :: ! Text
+       , _ffptComment               :: ! Text
        } deriving (Show, Eq, Data, Typeable)
 makeLenses ''FFPT
 
 mkFFPTs :: S57FileRecord -> [FFPT]
-mkFFPTs r 
-  | ((structureFieldName . rootLabel $ r) /= "FFPT") =
+mkFFPTs r
+  | (structureFieldName . rootLabel $ r) /= "FFPT" =
       error $ "not an FFPT record: " ++ show r
-  | otherwise = 
+  | otherwise =
       let rv = structureMultiField . rootLabel $ r
           lookupFieldM k _r =
-            maybe (error $ "mkFFPTs: unable to lookup key " ++ T.unpack k)
-            id $ Map.lookup k _r
+            fromMaybe (error $ "mkFFPTs: unable to lookup key " ++ T.unpack k) $
+            Map.lookup k _r
           _lookupField k _r = fromS57Value $ lookupFieldM k _r
           mkFFPT _r = FFPT { _ffptLongName = _lookupField "*LNAM" _r
                            , _ffptRelationShipIndicator = _lookupField "RIND" _r
@@ -85,16 +83,16 @@ mkFFPTs r
       in fmap mkFFPT rv
 
 data FSPC =
-  FSPC { _fspcUpdateInstruction :: ! UpdateInstruction
+  FSPC { _fspcUpdateInstruction   :: ! UpdateInstruction
        , _fspcSpatialPointerIndex :: ! Int
-       , _fspcSpatialPointers :: ! Int
+       , _fspcSpatialPointers     :: ! Int
        } deriving (Show, Eq, Data, Typeable)
 
 makeClassy ''FSPC
 
 readFSPC :: Tree S57Structure -> FSPC
 readFSPC r
-    | ((structureFieldName . rootLabel $ r) /= "FSPC") =
+    | (structureFieldName . rootLabel $ r) /= "FSPC" =
         error $ "not an FSPC record: " ++ show r
     | otherwise =
         FSPC { _fspcUpdateInstruction = lookupField r "FSUI"
@@ -103,20 +101,21 @@ readFSPC r
              }
 
 data FSPT =
-  FSPT { _fsptName :: ! RecordName
-       , _fsptOrientation :: ! Orientation
-       , _fsptUsageIndicator :: ! UsageIndicator
+  FSPT { _fsptName             :: ! RecordName
+       , _fsptOrientation      :: ! Orientation
+       , _fsptUsageIndicator   :: ! UsageIndicator
        , _fsptMaskingIndicator :: ! MaskingIndicator
        } deriving (Show, Eq, Data, Typeable)
 
 mkFSPTs :: S57FileRecord -> [FSPT]
-mkFSPTs r 
-  | ((structureFieldName . rootLabel $ r) /= "FSPT") = error $ "not an FSPT record: " ++ show r
-  | otherwise = 
+mkFSPTs r
+  | (structureFieldName . rootLabel $ r) /= "FSPT" =
+      error $ "not an FSPT record: " ++ show r
+  | otherwise =
       let rv = structureMultiField . rootLabel $ r
           lookupFieldM k _r =
-            maybe (error $ "mkFSPT: unable to lookup key " ++ T.unpack k)
-            id $ Map.lookup k _r
+            fromMaybe (error $ "mkFSPT: unable to lookup key " ++ T.unpack k) $
+            Map.lookup k _r
           _lookupField k _r = fromS57Value $ lookupFieldM k _r
           mkFSPT _r = FSPT { _fsptName = _lookupField "*NAME" _r
                            , _fsptOrientation = _lookupField "ORNT" _r
@@ -130,62 +129,59 @@ data GeometricPrimitive = Point | Line | Area | NoRef
   deriving (Show, Eq, Data, Typeable)
 
 data FRID =
-  FRID { _fridRecordName :: ! RecordName
+  FRID { _fridRecordName        :: ! RecordName
        , _fridGeometricPrimtive :: ! GeometricPrimitive
-       , _fridGroup :: ! (Maybe Int)
-       , _fridObjectLabel :: ! Int
-       , _fridVersion :: ! Int
+       , _fridGroup             :: ! (Maybe Int)
+       , _fridObjectLabel       :: ! Int
+       , _fridVersion           :: ! Int
        , _fridUpdateInstruction :: ! UpdateInstruction
-       , _fridFOID :: ! FOID
-       , _fridATTFs :: ! (Map Int Text)
-       , _fridNATFs :: ! (Map Int Text)
-       , _fridFFPC :: ! (Maybe FFPC)
-       , _fridFFPTs :: ! [FFPT]
-       , _fridFSPC :: ! (Maybe FSPC)        
-       , _fridFSPTs :: ! [FSPT]
+       , _fridFOID              :: ! FOID
+       , _fridATTFs             :: ! (Map Int Text)
+       , _fridNATFs             :: ! (Map Int Text)
+       , _fridFFPC              :: ! (Maybe FFPC)
+       , _fridFFPTs             :: ! [FFPT]
+       , _fridFSPC              :: ! (Maybe FSPC)
+       , _fridFSPTs             :: ! [FSPT]
        }  deriving (Show, Eq, Data, Typeable)
 makeLenses ''FRID
 
 
-instance Tabular FRID where
-  type PKT FRID = RecordName 
-  data Key k FRID b where
-    FRIDRecordName :: Key Primary FRID RecordName
-  data Tab FRID i = FRIDTab (i Primary RecordName)
+updateFFPTs :: FRID -> FRID -> FFPC -> [FFPT]
+updateFFPTs = updatePointerFields
+              ffpcUpdateInstruction
+              ffpcObjectPointerIndex
+              ffpcObjectPointers
+              fridFFPTs
 
-  fetch FRIDRecordName = view recordName
-
-  primary = FRIDRecordName
-  primarily FRIDRecordName rn = rn
-
-  mkTab f
-    = FRIDTab <$> f FRIDRecordName
-  forTab (FRIDTab rn) f
-    = FRIDTab <$> f FRIDRecordName rn
-  ixTab  (FRIDTab rn) FRIDRecordName = rn
+updateFSPTs :: FRID -> FRID -> FSPC -> [FSPT]
+updateFSPTs = updatePointerFields
+              fspcUpdateInstruction
+              fspcSpatialPointerIndex
+              fspcSpatialPointers
+              fridFSPTs
 
 
-fridUpsert :: Table FRID -> FRID -> Table FRID
+fridUpsert :: RecordTable FRID -> FRID -> RecordTable FRID
 fridUpsert tbl v =
   let rv = v ^. fridVersion
       vui = v ^. fridUpdateInstruction
-  in case (vui) of
+  in case vui of
    Insert ->
-     if (rv /= 1)
+     if rv /= 1
      then error $ "fridUpsert: INSERT record with version != 1: " ++ show v
-     else insert v tbl
-   Delete -> delete v tbl
+     else insertRecord v tbl
+   Delete -> deleteRecord v tbl
    Modify ->
-     let rn = v ^. recordName            
-         r = maybe
+     let rn = v ^. recordName
+         r = fromMaybe
              (error $ "fridUpdate: MODIFY for non existing record: " ++
-              show rn) id $ lookupFrid tbl rn
+              show rn) $ lookupRecord v tbl
          attfs = updateATTFs (r ^. fridATTFs) $ Map.toList $ v ^. fridATTFs
          natfs = updateATTFs (r ^. fridNATFs) $ Map.toList $ v ^. fridNATFs
          ffpts = maybe (v ^. fridFFPTs) (updateFFPTs v r) $
-                 pointerUpdateApplyable fridFFPC fridFFPTs r     
+                 pointerUpdateApplyable fridFFPC fridFFPTs r
          fspts = maybe (v ^. fridFSPTs) (updateFSPTs v r) $
-                 pointerUpdateApplyable fridFSPC fridFSPTs r     
+                 pointerUpdateApplyable fridFSPC fridFSPTs r
 
          r' = r { _fridVersion = rv
                 , _fridUpdateInstruction = vui
@@ -194,32 +190,9 @@ fridUpsert tbl v =
                 , _fridFFPTs = ffpts
                 , _fridFSPTs = fspts
                 }
-     in if (rv <= (r ^.fridVersion))          
-        then error $ "fridUpdate: MODIFY must have a version >= " ++ show rv 
-        else insert r' tbl
-
-
-
-updateFFPTs :: FRID -> FRID -> FFPC -> [FFPT]
-updateFFPTs = updatePointerFields 
-              ffpcUpdateInstruction
-              ffpcObjectPointerIndex
-              ffpcObjectPointers
-              fridFFPTs
-
-updateFSPTs :: FRID -> FRID -> FSPC -> [FSPT]
-updateFSPTs = updatePointerFields 
-              fspcUpdateInstruction
-              fspcSpatialPointerIndex
-              fspcSpatialPointers
-              fridFSPTs
-
-
-lookupFrid :: Table FRID -> RecordName -> Maybe FRID
-lookupFrid tbl rn =
-  case ((tbl ^. with FRIDRecordName (==) rn) ^. from table) of
-   [] -> Nothing
-   (x:_) -> Just x
+     in if rv <= r ^.fridVersion
+        then error $ "fridUpdate: MODIFY must have a version >= " ++ show rv
+        else insertRecord r' tbl
 
 
 
@@ -232,7 +205,7 @@ instance HasRecordName FRID where
 
 instance FromS57FileRecord FRID where
   fromS57FileDataRecord r
-    | ((structureFieldName . rootLabel $ r) /= "FRID") =
+    | (structureFieldName . rootLabel $ r) /= "FRID" =
         error $ "not an FRID record: " ++ show r
     | otherwise =
         let groupV = lookupField r "GRUP"
@@ -240,7 +213,7 @@ instance FromS57FileRecord FRID where
                      _rcnm = lookupField r "RCNM",
                      _rcid = lookupField r "RCID" }
                 , _fridGeometricPrimtive = lookupField r "PRIM"
-                , _fridGroup = if ((groupV >= 1) && (groupV <=254))
+                , _fridGroup = if (groupV >= 1) && (groupV <=254)
                                then Just groupV else Nothing
                 , _fridObjectLabel = lookupField r "OBJL"
                 , _fridVersion = lookupField r "RVER"
@@ -250,12 +223,10 @@ instance FromS57FileRecord FRID where
                                lookupChildFieldM "FRID" r "ATTF"
                 , _fridNATFs = maybe mempty mkAttrs $
                                lookupChildFieldM "FRID" r "NATF"
-                , _fridFFPC = fmap readFFPC $
-                              lookupChildFieldM "FRID" r "FFPC"
+                , _fridFFPC = readFFPC <$> lookupChildFieldM "FRID" r "FFPC"
                 , _fridFFPTs = maybe mempty mkFFPTs $
                                lookupChildFieldM "FRID" r "FFPT"
-                , _fridFSPC = fmap readFSPC $
-                              lookupChildFieldM "FRID" r "FSPC"
+                , _fridFSPC = readFSPC <$> lookupChildFieldM "FRID" r "FSPC"
                 , _fridFSPTs = maybe mempty mkFSPTs $
                                lookupChildFieldM "FRID" r "FSPT"
                 }
@@ -294,4 +265,3 @@ instance FromS57Value RelationShipIndicator where
   fromS57Value (S57CharData "P") = Peer
   fromS57Value (S57Int i) = toEnum i
   fromS57Value v = error $ "fromS57Value RelationShipIndicator undefined for " ++ show v
-

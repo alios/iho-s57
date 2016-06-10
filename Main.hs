@@ -1,16 +1,16 @@
 
 module Main (main) where
 
-import Data.Conduit
-import Data.Text (Text)
-import qualified Data.Conduit.Binary as CB
-import qualified Data.Conduit.Text as CT
-import qualified Data.Text as T
-import Data.IHO.S57.Reader
-import Text.Groom
-import Control.Monad.Trans.Resource
-import Control.Lens
-import Data.Table
+
+import           Control.Monad.Trans.Resource
+import           Data.Conduit
+import qualified Data.Conduit.Binary          as CB
+import qualified Data.Conduit.Text            as CT
+import           Data.IHO.S57.Reader
+import           Data.Text                    (Text)
+import qualified Data.Text                    as T
+import           Text.Groom
+
 
 p :: FilePath
 p = "/home/alios/Documents/IHO/data/NOAA/ENC_ROOT/"
@@ -42,8 +42,9 @@ showRecord = do
    Nothing -> return ()
 
 fileOutput :: (MonadThrow m, MonadResource m) => FilePath -> Sink Text m ()
-fileOutput fp = CT.encode CT.utf8 =$ CB.sinkFile fp 
+fileOutput fp = CT.encode CT.utf8 =$ CB.sinkFile fp
 
+{-
 readDF :: IO ()
 readDF = do
   ds <- runResourceT $ s57src $$ s57readDataSet
@@ -52,6 +53,7 @@ readDF = do
   _ <- sequence $ fmap (putStrLn . groom) vs
   _ <- sequence $ fmap (putStrLn . groom) fs
   return ()
+-}
 
 readCat :: IO ()
 readCat = do
@@ -60,7 +62,7 @@ readCat = do
   _ <- sequence $ fmap (putStrLn . groom) catds
   return ()
 
-  
+
 main :: IO ()
 main = do
   readCat

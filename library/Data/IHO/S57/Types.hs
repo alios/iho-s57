@@ -1,42 +1,60 @@
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE DeriveDataTypeable   #-}
+{-# LANGUAGE DeriveGeneric        #-}
+{-# LANGUAGE FlexibleContexts     #-}
+{-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE OverloadedStrings    #-}
+{-# LANGUAGE TemplateHaskell      #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE FlexibleInstances #-}
 
 module Data.IHO.S57.Types where
 
-import Control.Lens
-import Data.Data (Data)
-import Data.Typeable (Typeable)
-import Data.Text (Text)
-import Data.Tree
-import Data.ByteString (ByteString)
+import           Control.Lens
+import           Data.Binary.Get
+import           Data.ByteString      (ByteString)
 import qualified Data.ByteString.Lazy as BL
-import Data.Map (Map)
-import qualified Data.Text as T
-import qualified Data.Map as Map
-import Data.Binary.Get
-import Data.Monoid
-import Data.Char (chr)
+import           Data.Char            (chr)
+import           Data.Data            (Data)
+import           Data.Hashable
+import           Data.HashMap.Lazy    (HashMap)
+import qualified Data.HashMap.Lazy    as HashMap
+import           Data.Map             (Map)
+import qualified Data.Map             as Map
+import           Data.Text            (Text)
+import qualified Data.Text            as T
+import           Data.Tree
+import           Data.Typeable        (Typeable)
+import           GHC.Generics
+
 
 data RecordNameT =
   CD | DS | DP | FE | IsolatedNode | ConnectedNode | Edge | Face
-  deriving (Show, Eq, Ord, Data, Typeable)
+  deriving (Show, Eq, Ord, Data, Typeable, Generic)
 
+instance Hashable RecordNameT
 
 data RecordName = RecordName {
   _rcnm :: RecordNameT,
   _rcid :: Int
-  } deriving (Show, Eq, Ord, Data, Typeable)
+  } deriving (Show, Eq, Ord, Data, Typeable, Generic)
 makeClassy ''RecordName
+
+instance Hashable RecordName
+
 
 data Record r = Record {
   _recName :: RecordName,
   _recData :: r
   }
 makeLenses ''Record
+
+type RecordTable a = HashMap RecordName a
+
+insertRecord, deleteRecord :: HasRecordName v => v -> RecordTable v -> RecordTable v
+insertRecord v = HashMap.insert (v ^. recordName) v
+deleteRecord v = HashMap.delete (v ^. recordName)
+lookupRecord :: HasRecordName v => v -> RecordTable v -> Maybe v
+lookupRecord v = HashMap.lookup (v ^. recordName)
+
 
 instance HasRecordName (Record r) where
   recordName = recName
@@ -70,7 +88,7 @@ instance FromS57Value RecordNameT where
 instance Enum RecordNameT where
   fromEnum CD = error "CD not defined for binary use"
   fromEnum DS = 10
-  fromEnum DP = 20  
+  fromEnum DP = 20
   fromEnum FE = 100
   fromEnum IsolatedNode = 110
   fromEnum ConnectedNode = 120
@@ -90,7 +108,7 @@ data S57Value =
   S57CharData Text |
   S57Int Int |
   S57Real Double |
-  S57Bits ByteString 
+  S57Bits ByteString
   deriving (Eq, Show, Data, Typeable)
 
 class FromS57Value t where
@@ -160,7 +178,7 @@ data UsageIndicator
   deriving (Show, Eq, Data, Typeable)
 
 data MaskingIndicator
-  = Mask | Show | NullMask           
+  = Mask | Show | NullMask
   deriving (Show, Eq, Data, Typeable)
 
 
@@ -206,7 +224,7 @@ lookupRecords rn rs =
   let fin = filter (\r ->(structureFieldName . rootLabel $ r) == rn) rs
       fout = filter (\r ->(structureFieldName . rootLabel $ r) /= rn) rs
   in (fin,fout)
-  
+
 
 lookupChildFields :: Text -> S57FileRecord -> Text -> [Tree S57Structure]
 lookupChildFields p n fn =
@@ -224,15 +242,15 @@ lookupChildFieldM p n fn =
    (x:_) -> Just x
 
 lookupField :: FromS57Value t => Tree S57Structure -> Text -> t
-lookupField r = 
+lookupField r =
   let rv = structureLinearField . rootLabel $ r
       lookupFieldM k =
         maybe (error $ "lookupField: unable to lookup key " ++ T.unpack k)
         id $ Map.lookup k rv
-  in fromS57Value . lookupFieldM 
+  in fromS57Value . lookupFieldM
 
-readRecordName :: Tree S57Structure -> RecordName 
-readRecordName r = 
+readRecordName :: Tree S57Structure -> RecordName
+readRecordName r =
   RecordName { _rcnm = lookupField r "RCNM"
              , _rcid = lookupField r "RCID" }
 
@@ -242,7 +260,7 @@ updateATTFs = foldl updateATTFs'
 updateATTFs' :: Map Int Text -> (Int, Text) -> Map Int Text
 updateATTFs' m (i, t) =
   if (t == s57deleteChar) then Map.delete i m else Map.insert i t m
-    
+
 s57deleteChar :: Text
 s57deleteChar =  T.singleton $ chr 0x7f
 
@@ -256,25 +274,25 @@ updatePointerFields ::
   -> a
   -> s
   -> [b]
-updatePointerFields pui pidx pn g v r vrpc = 
-  let upP = vrpc ^. pidx 
+updatePointerFields pui pidx pn g v r vrpc =
+  let upP = vrpc ^. pidx
       upN = vrpc ^. pn
       rpcUI = vrpc ^. pui
       rpts' = v ^. g
-      rptsN = 
+      rptsN =
         let rs = r ^. g
         in if ((rpcUI /= Delete) && (length rs /= upN))
            then error $ mconcat ["updatePointerFields: ",show rpcUI
                                 ," but wrong number of subfields: "
                                 , show r
-                                ]                                        
+                                ]
            else rs
       in case (rpcUI) of
         Insert -> mconcat [take upP rpts', rptsN, drop upP rpts']
         Delete -> mconcat [take upP rpts', drop (upP + upN ) rpts']
         Modify -> mconcat [take upP rpts'
                           ,rptsN
-                          ,drop (upP + upN ) rpts'] 
+                          ,drop (upP + upN ) rpts']
 
 
 pointerUpdateApplyable :: Getting (Maybe a) s (Maybe a)
@@ -299,7 +317,7 @@ instance FromS57Value RecordName where
         (rn, rid) = getRNFs $ BL.fromStrict bs
     in RecordName { _rcnm = rn, _rcid = rid }
   fromS57Value v = error $ "fromS57Value UsageIndicator undefined for " ++ show v
-  
+
 
 
 instance Enum UsageIndicator where
@@ -316,7 +334,7 @@ instance Enum UsageIndicator where
 instance FromS57Value UsageIndicator where
   fromS57Value (S57CharData "E") = Exterior
   fromS57Value (S57CharData "I") = Interior
-  fromS57Value (S57CharData "C") = TruncatedExterior 
+  fromS57Value (S57CharData "C") = TruncatedExterior
   fromS57Value (S57CharData "N") = NullUsage
   fromS57Value (S57Int i) = toEnum i
   fromS57Value v = error $ "fromS57Value UsageIndicator undefined for " ++ show v
@@ -364,5 +382,3 @@ instance FromS57Value Orientation where
   fromS57Value (S57CharData "R") = Reverse
   fromS57Value (S57Int i) = toEnum i
   fromS57Value v = error $ "fromS57Value Orientation undefined for " ++ show v
-
-
